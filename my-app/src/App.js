@@ -127,31 +127,30 @@ function App() {
       </Box>
 
         {/* Show navbar only when showNavbar = true */}
-        {showNavbar && (
-          isMobile ? <MobileNavbar /> : <Navbar />
-        )}
+        <>
+            {showNavbar && (isMobile ? <MobileNavbar /> : <Navbar />)}
 
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/pricing" element={<Pricing />} />
-        <Route path="/features" element={<Features />} />
-        <Route path="/contact" element={<ContactUs />} />
-        <Route path="/live" element={<Live />} />
-        <Route path="/login" element={<Login />} />
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/pricing" element={<Pricing />} />
+              <Route path="/features" element={<Features />} />
+              <Route path="/contact" element={<ContactUs />} />
+              <Route path="/live" element={<Live />} />
+              <Route path="/login" element={<Login />} />
 
-        {/* Dashboard should use its own navbar */}
-        <Route
-          path="/dashboard"
-          element={
-            <>
-              <DashboardNavbar />
-              <LoginPage />
-              <LoginImageGallery/>
+              <Route
+                path="/dashboard"
+                element={
+                  <>
+                    <DashboardNavbar />
+                    <LoginPage />
+                    <LoginImageGallery />
+                  </>
+                }
+              />
+            </Routes>
+          </>
 
-            </>
-          }
-        />
-      </Routes>
       <Footer/>
 
       </Box>
