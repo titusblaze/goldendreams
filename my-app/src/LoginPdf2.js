@@ -33,7 +33,6 @@ import * as pdfjsLib from "pdfjs-dist";
 
 import "./LoginPdf2.css";
 
-
 // =====================================================
 // CONFIG
 // =====================================================
@@ -42,8 +41,11 @@ const DATA_API =
   "https://script.google.com/macros/s/AKfycbxNG3fuMW_DivRzBfhcPdwcJ3MTBgHOic1AhkWiMNhsXDq56a77Rg7UP4PpjeVQ116tbA/exec";
 
 const PDF_PROXY =
-  "http://localhost:5000/api/pdf";
+  "https://goldendreams.onrender.com/api/pdf";
 
+// =====================================================
+// PDF.JS WORKER
+// =====================================================
 
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
@@ -55,13 +57,11 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 
 const FlipPage = forwardRef(
   ({ src, pageNumber }, ref) => {
-
     return (
       <div
         ref={ref}
         className="pdf-book-page"
       >
-
         {src ? (
           <img
             src={src}
@@ -77,7 +77,6 @@ const FlipPage = forwardRef(
         <div className="page-number">
           {pageNumber}
         </div>
-
       </div>
     );
   }
@@ -201,6 +200,10 @@ export default function LoginPdf2() {
   const cleanupPdf =
     useCallback(() => {
 
+      // -----------------------------------------------
+      // Destroy loading task
+      // -----------------------------------------------
+
       try {
 
         if (loadingTaskRef.current) {
@@ -221,6 +224,10 @@ export default function LoginPdf2() {
       }
 
 
+      // -----------------------------------------------
+      // Destroy PDF document
+      // -----------------------------------------------
+
       try {
 
         if (pdfDocumentRef.current) {
@@ -240,6 +247,10 @@ export default function LoginPdf2() {
 
       }
 
+
+      // -----------------------------------------------
+      // Revoke old object URL if any
+      // -----------------------------------------------
 
       if (objectUrlRef.current) {
 
@@ -305,6 +316,10 @@ export default function LoginPdf2() {
           setError("");
 
 
+          // -------------------------------------------
+          // CHECK LOGIN
+          // -------------------------------------------
+
           if (!username) {
 
             setError(
@@ -319,6 +334,10 @@ export default function LoginPdf2() {
 
           }
 
+
+          // -------------------------------------------
+          // GET GOOGLE SHEET DATA
+          // -------------------------------------------
 
           const response =
             await fetch(
@@ -353,6 +372,10 @@ export default function LoginPdf2() {
           }
 
 
+          // -------------------------------------------
+          // FILTER USER
+          // -------------------------------------------
+
           const filtered =
             jsonData.filter(
               (item) => {
@@ -371,6 +394,10 @@ export default function LoginPdf2() {
               }
             );
 
+
+          // -------------------------------------------
+          // CREATE ALBUM LIST
+          // -------------------------------------------
 
           const albumList =
             filtered
@@ -401,6 +428,10 @@ export default function LoginPdf2() {
 
           setCurrentAlbum(0);
 
+
+          // -------------------------------------------
+          // NO ALBUM
+          // -------------------------------------------
 
           if (
             albumList.length === 0
@@ -465,6 +496,10 @@ export default function LoginPdf2() {
         albumKey
       ) => {
 
+        // ---------------------------------------------
+        // CHECK PAGE CACHE
+        // ---------------------------------------------
+
         const albumCache =
           renderedPageCacheRef.current.get(
             albumKey
@@ -481,6 +516,10 @@ export default function LoginPdf2() {
 
         }
 
+
+        // ---------------------------------------------
+        // PREVENT DUPLICATE RENDER
+        // ---------------------------------------------
 
         const renderKey =
           `${albumKey}-${pageNumber}`;
@@ -504,17 +543,29 @@ export default function LoginPdf2() {
 
         try {
 
+          // -------------------------------------------
+          // GET PDF PAGE
+          // -------------------------------------------
+
           const page =
             await pdf.getPage(
               pageNumber
             );
 
 
+          // -------------------------------------------
+          // PAGE VIEWPORT
+          // -------------------------------------------
+
           const viewport =
             page.getViewport({
               scale: 1.25,
             });
 
+
+          // -------------------------------------------
+          // DEVICE PIXEL RATIO
+          // -------------------------------------------
 
           const dpr =
             Math.min(
@@ -523,6 +574,10 @@ export default function LoginPdf2() {
               1.5
             );
 
+
+          // -------------------------------------------
+          // CREATE CANVAS
+          // -------------------------------------------
 
           const canvas =
             document.createElement(
@@ -539,6 +594,15 @@ export default function LoginPdf2() {
             );
 
 
+          if (!context) {
+
+            throw new Error(
+              "Unable to create canvas context."
+            );
+
+          }
+
+
           canvas.width =
             Math.floor(
               viewport.width * dpr
@@ -550,6 +614,10 @@ export default function LoginPdf2() {
               viewport.height * dpr
             );
 
+
+          // -------------------------------------------
+          // RENDER PDF PAGE
+          // -------------------------------------------
 
           await page.render({
 
@@ -570,12 +638,20 @@ export default function LoginPdf2() {
           }).promise;
 
 
+          // -------------------------------------------
+          // CONVERT CANVAS TO IMAGE
+          // -------------------------------------------
+
           const image =
             canvas.toDataURL(
               "image/jpeg",
               0.82
             );
 
+
+          // -------------------------------------------
+          // SAVE PAGE CACHE
+          // -------------------------------------------
 
           if (!albumCache) {
 
@@ -599,6 +675,14 @@ export default function LoginPdf2() {
           }
 
 
+          // -------------------------------------------
+          // CLEAN CANVAS
+          // -------------------------------------------
+
+          canvas.width = 1;
+          canvas.height = 1;
+
+
           return image;
 
         } finally {
@@ -615,7 +699,7 @@ export default function LoginPdf2() {
 
 
   // ===================================================
-  // DOWNLOAD / OPEN PDF
+  // LOAD PDF
   // ===================================================
 
   const loadPDF =
@@ -641,6 +725,10 @@ export default function LoginPdf2() {
           ++requestIdRef.current;
 
 
+        // ---------------------------------------------
+        // CANCEL PREVIOUS REQUEST
+        // ---------------------------------------------
+
         abortCurrentRequest();
 
         cleanupPdf();
@@ -665,10 +753,6 @@ export default function LoginPdf2() {
 
         try {
 
-          // =========================================
-          // PDF CACHE
-          // =========================================
-
           let blob =
             pdfBlobCacheRef.current.get(
               albumKey
@@ -682,15 +766,43 @@ export default function LoginPdf2() {
           if (!blob) {
 
             console.log(
+              "================================="
+            );
+
+            console.log(
               "Downloading PDF..."
             );
 
+            console.log(
+              "My Cloud Share URL:",
+              albumKey
+            );
+
+            console.log(
+              "Render PDF Proxy:",
+              PDF_PROXY
+            );
+
+
+            const proxyUrl =
+              `${PDF_PROXY}?url=${encodeURIComponent(
+                albumKey
+              )}`;
+
+
+            console.log(
+              "PDF Proxy URL:",
+              proxyUrl
+            );
+
+
+            // -----------------------------------------
+            // FETCH FROM RENDER
+            // -----------------------------------------
 
             const response =
               await fetch(
-                `${PDF_PROXY}?url=${encodeURIComponent(
-                  albumKey
-                )}`,
+                proxyUrl,
                 {
                   signal:
                     controller.signal,
@@ -700,6 +812,10 @@ export default function LoginPdf2() {
                 }
               );
 
+
+            // -----------------------------------------
+            // REQUEST CANCELLED
+            // -----------------------------------------
 
             if (
               controller.signal.aborted ||
@@ -712,10 +828,45 @@ export default function LoginPdf2() {
             }
 
 
+            // -----------------------------------------
+            // HTTP ERROR
+            // -----------------------------------------
+
             if (!response.ok) {
 
               throw new Error(
                 `PDF Server Error: ${response.status}`
+              );
+
+            }
+
+
+            // -----------------------------------------
+            // CHECK CONTENT TYPE
+            // -----------------------------------------
+
+            const contentType =
+              response.headers.get(
+                "content-type"
+              ) || "";
+
+
+            console.log(
+              "PDF Content-Type:",
+              contentType
+            );
+
+
+            if (
+              !contentType
+                .toLowerCase()
+                .includes(
+                  "application/pdf"
+                )
+            ) {
+
+              throw new Error(
+                `Invalid PDF response. Content-Type: ${contentType}`
               );
 
             }
@@ -726,13 +877,32 @@ export default function LoginPdf2() {
             );
 
 
-            blob =
-              await response.blob();
+            // -----------------------------------------
+            // READ PDF AS ARRAY BUFFER
+            // -----------------------------------------
+
+            const arrayBuffer =
+              await response.arrayBuffer();
+
+
+            // -----------------------------------------
+            // CHECK AGAIN
+            // -----------------------------------------
+
+            if (
+              controller.signal.aborted ||
+              requestId !==
+                requestIdRef.current
+            ) {
+
+              return;
+
+            }
 
 
             if (
-              !blob ||
-              blob.size === 0
+              !arrayBuffer ||
+              arrayBuffer.byteLength === 0
             ) {
 
               throw new Error(
@@ -741,6 +911,35 @@ export default function LoginPdf2() {
 
             }
 
+
+            console.log(
+              "PDF received:",
+              (
+                arrayBuffer.byteLength /
+                1024 /
+                1024
+              ).toFixed(2),
+              "MB"
+            );
+
+
+            // -----------------------------------------
+            // CREATE BLOB FOR DOWNLOAD
+            // -----------------------------------------
+
+            blob =
+              new Blob(
+                [arrayBuffer],
+                {
+                  type:
+                    "application/pdf",
+                }
+              );
+
+
+            // -----------------------------------------
+            // CACHE PDF
+            // -----------------------------------------
 
             pdfBlobCacheRef.current.set(
               albumKey,
@@ -757,21 +956,7 @@ export default function LoginPdf2() {
 
 
           // =========================================
-          // BLOB URL
-          // =========================================
-
-          const blobUrl =
-            URL.createObjectURL(
-              blob
-            );
-
-
-          objectUrlRef.current =
-            blobUrl;
-
-
-          // =========================================
-          // OPEN PDF
+          // PDF.JS
           // =========================================
 
           setLoadingText(
@@ -779,15 +964,62 @@ export default function LoginPdf2() {
           );
 
 
+          // -----------------------------------------
+          // GET ARRAY BUFFER FROM BLOB
+          // -----------------------------------------
+
+          const arrayBuffer =
+            await blob.arrayBuffer();
+
+
+          if (
+            controller.signal.aborted ||
+            requestId !==
+              requestIdRef.current
+          ) {
+
+            return;
+
+          }
+
+
+          console.log(
+            "Sending PDF to PDF.js:",
+            (
+              arrayBuffer.byteLength /
+              1024 /
+              1024
+            ).toFixed(2),
+            "MB"
+          );
+
+
+          // -----------------------------------------
+          // CREATE PDF.JS LOADING TASK
+          // -----------------------------------------
+
           const loadingTask =
-            pdfjsLib.getDocument(
-              blobUrl
-            );
+            pdfjsLib.getDocument({
+              data:
+                new Uint8Array(
+                  arrayBuffer
+                ),
+
+              disableAutoFetch:
+                false,
+
+              disableStream:
+                false,
+            });
 
 
           loadingTaskRef.current =
             loadingTask;
 
+
+          // -----------------------------------------
+          // LOAD PDF
+          // -----------------------------------------
 
           const pdf =
             await loadingTask.promise;
@@ -804,6 +1036,17 @@ export default function LoginPdf2() {
           }
 
 
+          console.log(
+            "PDF loaded successfully."
+          );
+
+
+          console.log(
+            "Total pages:",
+            pdf.numPages
+          );
+
+
           pdfDocumentRef.current =
             pdf;
 
@@ -812,8 +1055,14 @@ export default function LoginPdf2() {
             pdf.numPages;
 
 
-          setTotalPages(count);
+          setTotalPages(
+            count
+          );
 
+
+          // =========================================
+          // CREATE EMPTY PAGE ARRAY
+          // =========================================
 
           const emptyPages =
             Array.from(
@@ -884,34 +1133,13 @@ export default function LoginPdf2() {
 
 
           // =========================================
-          // BACKGROUND RENDER
+          // BACKGROUND RENDERING
           // =========================================
 
           setTimeout(
             async () => {
 
-              if (
-                controller.signal.aborted ||
-                requestId !==
-                  requestIdRef.current
-              ) {
-
-                return;
-
-              }
-
-
-              // FIRST 2 EXTRA PAGES
-
-              for (
-                let page = 2;
-                page <=
-                  Math.min(
-                    count,
-                    3
-                  );
-                page++
-              ) {
+              try {
 
                 if (
                   controller.signal.aborted ||
@@ -924,87 +1152,126 @@ export default function LoginPdf2() {
                 }
 
 
-                const image =
-                  await renderPage(
-                    pdf,
-                    page,
-                    albumKey
-                  );
+                // -----------------------------------
+                // FIRST EXTRA PAGES
+                // -----------------------------------
 
-
-                if (image) {
-
-                  setPages(
-                    previous => {
-
-                      const next =
-                        [...previous];
-
-                      next[page - 1] =
-                        image;
-
-                      return next;
-
-                    }
-                  );
-
-                }
-
-              }
-
-
-              // REMAINING PAGES
-
-              for (
-                let page = 4;
-                page <= count;
-                page++
-              ) {
-
-                if (
-                  controller.signal.aborted ||
-                  requestId !==
-                    requestIdRef.current
+                for (
+                  let page = 2;
+                  page <=
+                    Math.min(
+                      count,
+                      3
+                    );
+                  page++
                 ) {
 
-                  return;
+                  if (
+                    controller.signal.aborted ||
+                    requestId !==
+                      requestIdRef.current
+                  ) {
+
+                    return;
+
+                  }
+
+
+                  const image =
+                    await renderPage(
+                      pdf,
+                      page,
+                      albumKey
+                    );
+
+
+                  if (image) {
+
+                    setPages(
+                      previous => {
+
+                        const next =
+                          [...previous];
+
+                        next[page - 1] =
+                          image;
+
+                        return next;
+
+                      }
+                    );
+
+                  }
 
                 }
 
 
-                const image =
-                  await renderPage(
-                    pdf,
-                    page,
-                    albumKey
-                  );
+                // -----------------------------------
+                // REMAINING PAGES
+                // -----------------------------------
+
+                for (
+                  let page = 4;
+                  page <= count;
+                  page++
+                ) {
+
+                  if (
+                    controller.signal.aborted ||
+                    requestId !==
+                      requestIdRef.current
+                  ) {
+
+                    return;
+
+                  }
 
 
-                if (image) {
+                  const image =
+                    await renderPage(
+                      pdf,
+                      page,
+                      albumKey
+                    );
 
-                  setPages(
-                    previous => {
 
-                      const next =
-                        [...previous];
+                  if (image) {
 
-                      next[page - 1] =
-                        image;
+                    setPages(
+                      previous => {
 
-                      return next;
+                        const next =
+                          [...previous];
 
-                    }
+                        next[page - 1] =
+                          image;
+
+                        return next;
+
+                      }
+                    );
+
+                  }
+
+
+                  // Small delay prevents
+                  // browser from freezing
+
+                  await new Promise(
+                    resolve =>
+                      setTimeout(
+                        resolve,
+                        10
+                      )
                   );
 
                 }
 
+              } catch (backgroundError) {
 
-                await new Promise(
-                  resolve =>
-                    setTimeout(
-                      resolve,
-                      10
-                    )
+                console.error(
+                  "Background page rendering error:",
+                  backgroundError
                 );
 
               }
@@ -1014,6 +1281,10 @@ export default function LoginPdf2() {
           );
 
         } catch (err) {
+
+          // -------------------------------------------
+          // IGNORE ABORTED REQUEST
+          // -------------------------------------------
 
           if (
             controller.signal.aborted ||
@@ -1027,8 +1298,19 @@ export default function LoginPdf2() {
 
 
           console.error(
-            "PDF Error:",
+            "================================="
+          );
+
+          console.error(
+            "PDF ERROR"
+          );
+
+          console.error(
             err
+          );
+
+          console.error(
+            "================================="
           );
 
 
@@ -1036,9 +1318,32 @@ export default function LoginPdf2() {
 
           setTotalPages(0);
 
-          setError(
+
+          // -------------------------------------------
+          // FRIENDLY ERROR
+          // -------------------------------------------
+
+          let errorMessage =
             err?.message ||
-            "Unable to load PDF."
+            "Unable to load PDF.";
+
+
+          if (
+            errorMessage
+              .toLowerCase()
+              .includes(
+                "failed to fetch"
+              )
+          ) {
+
+            errorMessage =
+              "Unable to connect to the PDF server. Please check your internet connection or try again.";
+
+          }
+
+
+          setError(
+            errorMessage
           );
 
           setLoading(false);
@@ -1308,6 +1613,10 @@ export default function LoginPdf2() {
           return;
 
 
+        // ---------------------------------------------
+        // USE CACHED PDF
+        // ---------------------------------------------
+
         const blob =
           pdfBlobCacheRef.current.get(
             selectedPDF
@@ -1328,7 +1637,9 @@ export default function LoginPdf2() {
             );
 
 
-          link.href = url;
+          link.href =
+            url;
+
 
           link.download =
             `${selectedHeading || "Digital-Album"}.pdf`;
@@ -1341,22 +1652,36 @@ export default function LoginPdf2() {
 
           link.click();
 
+
           link.remove();
 
 
           setTimeout(
             () =>
-              URL.revokeObjectURL(url),
+              URL.revokeObjectURL(
+                url
+              ),
             1000
           );
+
 
           return;
 
         }
 
 
+        // ---------------------------------------------
+        // FALLBACK
+        // ---------------------------------------------
+
+        const proxyUrl =
+          `${PDF_PROXY}?url=${encodeURIComponent(
+            selectedPDF
+          )}`;
+
+
         window.open(
-          selectedPDF,
+          proxyUrl,
           "_blank"
         );
 
@@ -1726,7 +2051,9 @@ export default function LoginPdf2() {
         className="pdf-stage"
       >
 
-        {/* LOADING */}
+        {/* =================================================
+            LOADING
+        ================================================= */}
 
         {loading && (
 
@@ -1871,7 +2198,9 @@ export default function LoginPdf2() {
         )}
 
 
-        {/* ERROR */}
+        {/* =================================================
+            ERROR
+        ================================================= */}
 
         {!loading &&
           error &&
@@ -1903,7 +2232,9 @@ export default function LoginPdf2() {
           )}
 
 
-        {/* BOOK */}
+        {/* =================================================
+            BOOK
+        ================================================= */}
 
         {!loading &&
           pages.length > 0 && (
