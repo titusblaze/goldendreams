@@ -9,13 +9,13 @@ import CloseIcon from "@mui/icons-material/Close";
 // SAMPLE SLIDES (replace with your images & titles)
 const slides = [
   {
-    img: "https://plus.unsplash.com/premium_photo-1661391241585-6f866804a238?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NXx8cHJvZmVzc2lvbmFsJTIwcGhvdG9ncmFwaHl8ZW58MHx8MHx8fDA%3D",
+    img: "https://res.cloudinary.com/db3qhuau/image/upload/v1788086884/cld-sample.jpg",
     title: "Professional Photography",
     phone: "+919976149065",
 
   },
   {
-    img: "https://media.istockphoto.com/id/801862134/photo/video-camera-operator-working-with-his-equipment.webp?a=1&b=1&s=612x612&w=0&k=20&c=wuQyM5kmWQYSSgIXwS2hGZ8AYB2pmwJQXUdG6sSPgwE=",
+    img: "https://res.cloudinary.com/db3qhuau/image/upload/v1789465204/682A5673.jpg",
     title: "4K Cinematic Videography",
     phone: "+919976149065",
   },

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Box, IconButton } from "@mui/material";
 import { ChevronLeft, ChevronRight } from "@mui/icons-material";
 
-const DATA_API = "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLixu47H9HtywwLI50sZJYndM4nN7vu7Teyi7QbqoQjrWHjXO_2lf9ueIJfGrVYXX2Avdy9qQawcWZPHGJYqkLoUmAsPtLSalMAv_R5hoxMHXs0cGkn0xAv-VAEH8MC3vtHnn7hQVtF_0OWtuvSODmJliWGhCHXGuVE1juqSllxVUWmlplJsjezWVeclHpRMa_Y-h2ZvCFPHCdkfWYOs2LQs9Sf4baCn-zZ0d1ZLUG0bG7MBgwnsYE2_mr-_14d3RocYJje13gUZKjeCB9lHhudcBTnMB2rXhRj8w2Qq&lib=MDa2LEuS5fAlvUrBGznTW_9Txsk909hX6"; // GET API
+const DATA_API = "https://script.google.com/macros/s/AKfycbxNG3fuMW_DivRzBfhcPdwcJ3MTBgHOic1AhkWiMNhsXDq56a77Rg7UP4PpjeVQ116tbA/exec"; // GET API
 
 const LoginPage = () => {
   const [data, setData] = useState([]);

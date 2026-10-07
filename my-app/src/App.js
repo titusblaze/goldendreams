@@ -14,6 +14,12 @@ import LoginPage from './LoginPage';
 import ContactUs from './ContactUs';
 import DashboardNavbar from './DashboardNavbar';
 import LoginImageGallery from './LoginImageGallery';
+import LoginComponent from './LoginComponent';
+import LoginPdf from './LoginPdf';
+import LoginPdf1 from './LoginPdf1';
+import LoginPdf2 from './LoginPdf2';
+import LoginPageGallery from './LoginPageGallery';
+import LoginVideos from './LoginVideos'
 import Footer from './Footer';
 import { useMediaQuery } from "@mui/material";
 import { useQuery } from '@tanstack/react-query';
@@ -144,7 +150,13 @@ function App() {
                   <>
                     <DashboardNavbar />
                     <LoginPage />
-                    <LoginImageGallery />
+                    <LoginComponent />
+                     <LoginImageGallery /> 
+                    {/* <LoginPageGallery />
+                    <LoginPdf />
+                    <LoginPdf1 />
+                    <LoginPdf2 />
+                    <LoginVideos /> */}
                   </>
                 }
               />
