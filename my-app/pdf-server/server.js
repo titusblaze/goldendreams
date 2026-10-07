@@ -7,8 +7,6 @@ const app = express();
 // ======================================================
 // PORT
 // ======================================================
-// Local  -> 5000
-// Render -> Uses Render's PORT environment variable
 
 const PORT = process.env.PORT || 5000;
 
@@ -93,7 +91,7 @@ app.get("/api/pdf", async (req, res) => {
 
   try {
     // ==================================================
-    // Launch browser
+    // Launch Chromium
     // ==================================================
 
     console.log("");
@@ -124,18 +122,16 @@ app.get("/api/pdf", async (req, res) => {
     const page = await context.newPage();
 
     // ==================================================
-    // Variables
+    // Store the actual PDF response
     // ==================================================
-
-    let authenticatedPdfUrl = null;
 
     let pdfResponsePromise = null;
 
     // ==================================================
-    // Watch responses from My Cloud
+    // Watch My Cloud responses
     // ==================================================
 
-    page.on("response", async (response) => {
+    page.on("response", (response) => {
       try {
         const url = response.url();
 
@@ -143,24 +139,41 @@ app.get("/api/pdf", async (req, res) => {
           url.includes("/sdk/v2/files/") &&
           url.includes("/content")
         ) {
+          const contentType =
+            response.headers()["content-type"] || "";
+
           console.log("");
           console.log("------------------------------------------");
           console.log(" MY CLOUD CONTENT RESPONSE FOUND");
           console.log("------------------------------------------");
 
-          console.log("Status:", response.status());
+          console.log(
+            "Status:",
+            response.status()
+          );
 
           console.log(
             "Content-Type:",
-            response.headers()["content-type"]
+            contentType
           );
 
           console.log("URL:");
           console.log(url);
 
-          authenticatedPdfUrl = url;
+          // Only capture the PDF response
+          if (
+            response.status() === 200 &&
+            contentType
+              .toLowerCase()
+              .includes("application/pdf")
+          ) {
+            console.log("");
+            console.log(
+              "VALID PDF RESPONSE CAPTURED."
+            );
 
-          pdfResponsePromise = response;
+            pdfResponsePromise = response;
+          }
         }
       } catch (error) {
         console.log(
@@ -171,7 +184,7 @@ app.get("/api/pdf", async (req, res) => {
     });
 
     // ==================================================
-    // Open My Cloud
+    // Open My Cloud share
     // ==================================================
 
     console.log("");
@@ -185,67 +198,61 @@ app.get("/api/pdf", async (req, res) => {
     console.log("My Cloud page opened.");
 
     // ==================================================
-    // Wait for PDF URL
+    // Wait for actual PDF response
     // ==================================================
 
     console.log("");
     console.log(
-      "Waiting for My Cloud PDF content request..."
+      "Waiting for My Cloud PDF content response..."
     );
 
     const startTime = Date.now();
 
     while (
-      !authenticatedPdfUrl &&
+      !pdfResponsePromise &&
       Date.now() - startTime < 90000
     ) {
       await page.waitForTimeout(500);
     }
 
     // ==================================================
-    // Check PDF URL
+    // Check PDF response
     // ==================================================
 
-    if (!authenticatedPdfUrl) {
+    if (!pdfResponsePromise) {
       throw new Error(
-        "My Cloud did not generate a PDF content URL within 90 seconds."
+        "My Cloud did not generate a PDF content response within 90 seconds."
       );
     }
 
     console.log("");
     console.log("==========================================");
-    console.log(" AUTHENTICATED PDF URL FOUND");
+    console.log(" AUTHENTICATED PDF RESPONSE FOUND");
     console.log("==========================================");
 
-    console.log(authenticatedPdfUrl);
+    console.log(
+      "PDF URL:"
+    );
+
+    console.log(
+      pdfResponsePromise.url()
+    );
 
     // ==================================================
     // IMPORTANT
     //
-    // Use Playwright browser context request.
-    // This shares the My Cloud browser cookies/session.
+    // Do NOT make another request.
+    //
+    // The browser already received the PDF response.
+    // Read the PDF directly from that response.
     // ==================================================
 
     console.log("");
     console.log(
-      "Downloading PDF using authenticated browser session..."
+      "Reading PDF directly from browser response..."
     );
 
-    const apiRequest = context.request;
-
-    const pdfResponse = await apiRequest.get(
-      authenticatedPdfUrl,
-      {
-        timeout: 180000,
-
-        failOnStatusCode: false,
-
-        headers: {
-          Accept:
-            "application/pdf,application/octet-stream,*/*",
-        },
-      }
-    );
+    const pdfResponse = pdfResponsePromise;
 
     // ==================================================
     // Response information
@@ -253,7 +260,7 @@ app.get("/api/pdf", async (req, res) => {
 
     console.log("");
     console.log("------------------------------------------");
-    console.log(" PDF DOWNLOAD RESPONSE");
+    console.log(" PDF RESPONSE");
     console.log("------------------------------------------");
 
     console.log(
@@ -275,27 +282,20 @@ app.get("/api/pdf", async (req, res) => {
     // Check HTTP status
     // ==================================================
 
-    if (!pdfResponse.ok()) {
-      let errorText = "";
-
-      try {
-        errorText = await pdfResponse.text();
-      } catch {
-        errorText = "";
-      }
-
-      console.log("");
-      console.log("My Cloud returned an error:");
-      console.log(errorText.substring(0, 500));
-
+    if (pdfResponse.status() !== 200) {
       throw new Error(
         `My Cloud returned HTTP ${pdfResponse.status()}`
       );
     }
 
     // ==================================================
-    // Get PDF buffer
+    // Read PDF body
     // ==================================================
+
+    console.log("");
+    console.log(
+      "Reading PDF body..."
+    );
 
     const pdfBuffer = await pdfResponse.body();
 
@@ -379,7 +379,7 @@ app.get("/api/pdf", async (req, res) => {
       pdfBuffer.length
     );
 
-    // Important for browser/PDF.js access
+    // Important for browser / PDF.js
     res.setHeader(
       "Cache-Control",
       "no-store, no-cache, must-revalidate, proxy-revalidate"
@@ -398,7 +398,10 @@ app.get("/api/pdf", async (req, res) => {
     res.send(pdfBuffer);
 
     console.log("");
-    console.log("PDF SENT TO REACT SUCCESSFULLY.");
+    console.log(
+      "PDF SENT TO REACT SUCCESSFULLY."
+    );
+
     console.log("");
 
   } catch (error) {
@@ -417,10 +420,8 @@ app.get("/api/pdf", async (req, res) => {
     if (!res.headersSent) {
       res.status(500).json({
         success: false,
-
         message:
           "Unable to retrieve PDF from My Cloud.",
-
         error: error.message,
       });
     }
@@ -463,7 +464,7 @@ app.listen(PORT, () => {
   );
 
   console.log(
-    `PDF API: /api/pdf`
+    "PDF API: /api/pdf"
   );
 
   console.log("==========================================");
