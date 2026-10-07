@@ -4,6 +4,8 @@ import CutCornerBox from './CutCornerBox';
 import ImageSlider from './ImageSlider';
 import ImageGallery from './ImageGallery';
 import GoogleImage from './GoogleImage';
+import GoogleReview from './GoogleReview';
+import AboutUs from './AboutUs';
 
 
 
@@ -14,9 +16,11 @@ const Home = () => {
       
       
       <Banner />
-        <ImageSlider/>
-        <GoogleImage/>
+      <AboutUs />
+        {/* <ImageSlider/> */}
+        {/* <GoogleImage/> */}
         <ImageGallery/>
+        <GoogleReview/>
       {/* <CutCornerBox /> */}
     </Box>
   );

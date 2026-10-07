@@ -14,13 +14,13 @@ import ShareIcon from '@mui/icons-material/Share';
 import { useQuery } from '@tanstack/react-query';
 import emailjs from 'emailjs-com';
 import { motion } from "framer-motion";
-import Logo from "./logo.svg"; // <-- your logo
+import Logo from "../src/assets/image/logo512.png"; // <-- your logo
 import "./App.css";
 
 // Fetch API
 const fetchData = async () => {
   const url =
-    "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLjCZKvcMAKMcSFu3uw6l-QsZfHa2AcL0EBb0Ee90fWujYGX0i0VyhKWlDGvjCoAoyRHCcn35BJ6PyLtFdVGaHfGrVURlCWBLHiPGw45nbQxLXeaKRRjNuASz3y1M-jCc3BR-7XvpGi0SDgDPgRplvJykVVxFlOgPEQNTYqO-PNSFPSQgl2ziR02b61S5JpHasW0jG8d8VCKYzdsyl5TLM0otFBx5zhOqQS0rt9Hk1dLl4wXZPXKnLCHlhMjnXuahSu_89UDsYDOB5r7HQxLv5Pb27O_zQ&lib=ME9LPB3JZtBZlz1PevbxUQfFnlO6455Uk";
+    "https://script.google.com/macros/s/AKfycbxUgaJGstTiqyKIfDQzgv5zgR0OVROWCQUMdwv2pMMp-rMq1VP_4vkJDtltQtSr1poR/exec";
 
   const response = await fetch(url);
   if (!response.ok) throw new Error("Failed to fetch data");
