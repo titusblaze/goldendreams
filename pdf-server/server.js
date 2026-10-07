@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const https = require("https");
 const { chromium } = require("playwright");
 
 const app = express();
@@ -30,6 +31,120 @@ function isValidShareUrl(value) {
   }
 }
 
+/*
+----------------------------------------------------
+Download PDF using Node HTTPS
+----------------------------------------------------
+*/
+
+function downloadPdf(pdfUrl, cookieHeader, userAgent) {
+  return new Promise((resolve, reject) => {
+    console.log("");
+    console.log("------------------------------------------");
+    console.log(" DOWNLOADING AUTHENTICATED PDF");
+    console.log("------------------------------------------");
+
+    const request = https.get(
+      pdfUrl,
+      {
+        headers: {
+          Accept:
+            "application/pdf,application/octet-stream,*/*",
+
+          "User-Agent": userAgent,
+
+          Referer:
+            "https://os5.mycloud.com/",
+
+          Cookie: cookieHeader || "",
+        },
+
+        timeout: 180000,
+      },
+      (response) => {
+        console.log(
+          "PDF HTTP Status:",
+          response.statusCode
+        );
+
+        console.log(
+          "PDF Content-Type:",
+          response.headers["content-type"]
+        );
+
+        console.log(
+          "PDF Content-Length:",
+          response.headers["content-length"] || "unknown"
+        );
+
+        if (
+          response.statusCode < 200 ||
+          response.statusCode >= 300
+        ) {
+          let errorData = "";
+
+          response.on("data", (chunk) => {
+            errorData += chunk.toString();
+          });
+
+          response.on("end", () => {
+            reject(
+              new Error(
+                `My Cloud PDF download returned HTTP ${response.statusCode}: ${errorData.substring(
+                  0,
+                  500
+                )}`
+              )
+            );
+          });
+
+          return;
+        }
+
+        const chunks = [];
+
+        response.on("data", (chunk) => {
+          chunks.push(chunk);
+        });
+
+        response.on("end", () => {
+          const buffer = Buffer.concat(chunks);
+
+          console.log("");
+          console.log(
+            "PDF bytes received:",
+            buffer.length
+          );
+
+          resolve(buffer);
+        });
+
+        response.on("error", (error) => {
+          reject(error);
+        });
+      }
+    );
+
+    request.on("timeout", () => {
+      request.destroy(
+        new Error(
+          "PDF download timed out after 180 seconds."
+        )
+      );
+    });
+
+    request.on("error", (error) => {
+      reject(error);
+    });
+  });
+}
+
+/*
+----------------------------------------------------
+ROOT
+----------------------------------------------------
+*/
+
 app.get("/", (req, res) => {
   res.json({
     success: true,
@@ -37,6 +152,12 @@ app.get("/", (req, res) => {
     port: PORT,
   });
 });
+
+/*
+----------------------------------------------------
+PDF API
+----------------------------------------------------
+*/
 
 app.get("/api/pdf", async (req, res) => {
   const shareUrl = req.query.url;
@@ -50,6 +171,8 @@ app.get("/api/pdf", async (req, res) => {
   console.log(shareUrl);
 
   if (!shareUrl) {
+    console.log("ERROR: Missing share URL");
+
     return res.status(400).json({
       success: false,
       message: "Missing My Cloud share URL",
@@ -57,6 +180,8 @@ app.get("/api/pdf", async (req, res) => {
   }
 
   if (!isValidShareUrl(shareUrl)) {
+    console.log("ERROR: Invalid My Cloud URL");
+
     return res.status(400).json({
       success: false,
       message: "Invalid My Cloud OS 5 share URL",
@@ -71,6 +196,7 @@ app.get("/api/pdf", async (req, res) => {
 
     browser = await chromium.launch({
       headless: true,
+
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
@@ -81,16 +207,18 @@ app.get("/api/pdf", async (req, res) => {
 
     console.log("Chromium launched.");
 
+    const userAgent =
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+      "AppleWebKit/537.36 (KHTML, like Gecko) " +
+      "Chrome/154.0.0.0 Safari/537.36";
+
     const context = await browser.newContext({
       viewport: {
         width: 1440,
         height: 1000,
       },
 
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-        "AppleWebKit/537.36 (KHTML, like Gecko) " +
-        "Chrome/154.0.0.0 Safari/537.36",
+      userAgent,
 
       extraHTTPHeaders: {
         "Accept-Language": "en-US,en;q=0.9",
@@ -99,26 +227,15 @@ app.get("/api/pdf", async (req, res) => {
 
     const page = await context.newPage();
 
-    // This will contain the actual PDF bytes.
-    let pdfBuffer = null;
+    let authenticatedPdfUrl = null;
 
-    // Promise that resolves when the PDF is captured.
-    let pdfResolve;
+    /*
+    ------------------------------------------------
+    Watch My Cloud network requests
+    ------------------------------------------------
+    */
 
-    let pdfReject;
-
-    const pdfPromise = new Promise((resolve, reject) => {
-      pdfResolve = resolve;
-      pdfReject = reject;
-    });
-
-    // --------------------------------------------------
-    // IMPORTANT:
-    // Read the PDF body IMMEDIATELY when response arrives.
-    // Do NOT save the Playwright Response object.
-    // --------------------------------------------------
-
-    page.on("response", async (response) => {
+    page.on("response", (response) => {
       try {
         const url = response.url();
 
@@ -134,8 +251,15 @@ app.get("/api/pdf", async (req, res) => {
           console.log(" MY CLOUD CONTENT RESPONSE");
           console.log("------------------------------------------");
 
-          console.log("Status:", response.status());
-          console.log("Content-Type:", contentType);
+          console.log(
+            "Status:",
+            response.status()
+          );
+
+          console.log(
+            "Content-Type:",
+            contentType
+          );
 
           if (
             response.status() === 200 &&
@@ -143,65 +267,27 @@ app.get("/api/pdf", async (req, res) => {
               .toLowerCase()
               .includes("application/pdf")
           ) {
+            authenticatedPdfUrl = url;
+
             console.log("");
-            console.log("PDF RESPONSE FOUND!");
-            console.log("Reading PDF body immediately...");
-
-            try {
-              const body = await response.body();
-
-              if (!body || body.length === 0) {
-                throw new Error(
-                  "PDF response body is empty."
-                );
-              }
-
-              const header = body
-                .subarray(0, 4)
-                .toString("ascii");
-
-              console.log(
-                "Captured bytes:",
-                body.length
-              );
-
-              console.log(
-                "PDF Header:",
-                header
-              );
-
-              if (header !== "%PDF") {
-                throw new Error(
-                  "Captured response is not a valid PDF."
-                );
-              }
-
-              pdfBuffer = body;
-
-              console.log("");
-              console.log(
-                "PDF BODY CAPTURED SUCCESSFULLY!"
-              );
-
-              pdfResolve(body);
-            } catch (error) {
-              console.error("");
-              console.error(
-                "PDF body capture error:",
-                error.message
-              );
-
-              pdfReject(error);
-            }
+            console.log(
+              "AUTHENTICATED PDF URL CAPTURED!"
+            );
           }
         }
       } catch (error) {
-        console.error(
+        console.log(
           "Response listener error:",
           error.message
         );
       }
     });
+
+    /*
+    ------------------------------------------------
+    Open My Cloud
+    ------------------------------------------------
+    */
 
     console.log("");
     console.log("Opening My Cloud share...");
@@ -227,29 +313,104 @@ app.get("/api/pdf", async (req, res) => {
       );
     }
 
+    /*
+    ------------------------------------------------
+    Wait for authenticated PDF URL
+    ------------------------------------------------
+    */
+
     console.log("");
     console.log(
-      "Waiting for My Cloud PDF response..."
+      "Waiting for My Cloud PDF URL..."
     );
 
-    // Wait for the PDF body to be captured.
-    await Promise.race([
-      pdfPromise,
+    const startTime = Date.now();
 
-      new Promise((_, reject) => {
-        setTimeout(() => {
-          reject(
-            new Error(
-              "My Cloud did not provide the PDF within 90 seconds."
-            )
-          );
-        }, 90000);
-      }),
-    ]);
+    while (
+      !authenticatedPdfUrl &&
+      Date.now() - startTime < 90000
+    ) {
+      await page.waitForTimeout(500);
+    }
 
-    if (!pdfBuffer) {
+    if (!authenticatedPdfUrl) {
       throw new Error(
-        "PDF was not captured."
+        "My Cloud did not generate an authenticated PDF URL within 90 seconds."
+      );
+    }
+
+    console.log("");
+    console.log("==========================================");
+    console.log(" AUTHENTICATED PDF URL FOUND");
+    console.log("==========================================");
+
+    /*
+    ------------------------------------------------
+    Get browser cookies
+    ------------------------------------------------
+    */
+
+    const cookies = await context.cookies();
+
+    const cookieHeader = cookies
+      .map(
+        (cookie) =>
+          `${cookie.name}=${cookie.value}`
+      )
+      .join("; ");
+
+    console.log("");
+    console.log(
+      "Browser cookies:",
+      cookies.length
+    );
+
+    /*
+    ------------------------------------------------
+    Download using Node HTTPS
+    ------------------------------------------------
+    */
+
+    const pdfBuffer = await downloadPdf(
+      authenticatedPdfUrl,
+      cookieHeader,
+      userAgent
+    );
+
+    /*
+    ------------------------------------------------
+    Validate PDF
+    ------------------------------------------------
+    */
+
+    console.log("");
+    console.log("------------------------------------------");
+    console.log(" VALIDATING PDF");
+    console.log("------------------------------------------");
+
+    const pdfHeader = pdfBuffer
+      .subarray(0, 4)
+      .toString("ascii");
+
+    console.log(
+      "PDF Header:",
+      pdfHeader
+    );
+
+    if (pdfHeader !== "%PDF") {
+      console.log("");
+      console.log(
+        "First 100 bytes:"
+      );
+
+      console.log(
+        pdfBuffer
+          .subarray(0, 100)
+          .toString("utf8")
+      );
+
+      throw new Error(
+        "Downloaded content is not a valid PDF."
       );
     }
 
@@ -268,9 +429,11 @@ app.get("/api/pdf", async (req, res) => {
       "MB"
     );
 
-    // --------------------------------------------------
-    // SEND PDF TO CLIENT
-    // --------------------------------------------------
+    /*
+    ------------------------------------------------
+    Send PDF to client
+    ------------------------------------------------
+    */
 
     res.status(200);
 
@@ -311,6 +474,8 @@ app.get("/api/pdf", async (req, res) => {
       "PDF SENT TO CLIENT SUCCESSFULLY."
     );
 
+    console.log("");
+
   } catch (error) {
     console.error("");
     console.error("==========================================");
@@ -321,6 +486,8 @@ app.get("/api/pdf", async (req, res) => {
       "Error:",
       error.message
     );
+
+    console.error("");
 
     if (!res.headersSent) {
       res.status(500).json({
@@ -336,11 +503,9 @@ app.get("/api/pdf", async (req, res) => {
       try {
         await browser.close();
 
-        console.log("");
         console.log(
           "Chromium closed."
         );
-
       } catch (error) {
         console.log(
           "Browser close error:",
@@ -350,6 +515,12 @@ app.get("/api/pdf", async (req, res) => {
     }
   }
 });
+
+/*
+----------------------------------------------------
+START SERVER
+----------------------------------------------------
+*/
 
 app.listen(PORT, () => {
   console.log("");
