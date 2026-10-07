@@ -32,16 +32,16 @@ function isValidShareUrl(value) {
 }
 
 /*
-----------------------------------------------------
-Download PDF using Node HTTPS
-----------------------------------------------------
+====================================================
+DOWNLOAD PDF
+====================================================
 */
 
 function downloadPdf(pdfUrl, cookieHeader, userAgent) {
   return new Promise((resolve, reject) => {
     console.log("");
     console.log("------------------------------------------");
-    console.log(" DOWNLOADING AUTHENTICATED PDF");
+    console.log(" DOWNLOADING PDF");
     console.log("------------------------------------------");
 
     const request = https.get(
@@ -74,23 +74,24 @@ function downloadPdf(pdfUrl, cookieHeader, userAgent) {
 
         console.log(
           "PDF Content-Length:",
-          response.headers["content-length"] || "unknown"
+          response.headers["content-length"] ||
+            "unknown"
         );
 
         if (
           response.statusCode < 200 ||
           response.statusCode >= 300
         ) {
-          let errorData = "";
+          let errorText = "";
 
           response.on("data", (chunk) => {
-            errorData += chunk.toString();
+            errorText += chunk.toString();
           });
 
           response.on("end", () => {
             reject(
               new Error(
-                `My Cloud PDF download returned HTTP ${response.statusCode}: ${errorData.substring(
+                `PDF download returned HTTP ${response.statusCode}: ${errorText.substring(
                   0,
                   500
                 )}`
@@ -110,7 +111,6 @@ function downloadPdf(pdfUrl, cookieHeader, userAgent) {
         response.on("end", () => {
           const buffer = Buffer.concat(chunks);
 
-          console.log("");
           console.log(
             "PDF bytes received:",
             buffer.length
@@ -119,30 +119,26 @@ function downloadPdf(pdfUrl, cookieHeader, userAgent) {
           resolve(buffer);
         });
 
-        response.on("error", (error) => {
-          reject(error);
-        });
+        response.on("error", reject);
       }
     );
 
     request.on("timeout", () => {
       request.destroy(
         new Error(
-          "PDF download timed out after 180 seconds."
+          "PDF download timed out."
         )
       );
     });
 
-    request.on("error", (error) => {
-      reject(error);
-    });
+    request.on("error", reject);
   });
 }
 
 /*
-----------------------------------------------------
+====================================================
 ROOT
-----------------------------------------------------
+====================================================
 */
 
 app.get("/", (req, res) => {
@@ -154,9 +150,9 @@ app.get("/", (req, res) => {
 });
 
 /*
-----------------------------------------------------
+====================================================
 PDF API
-----------------------------------------------------
+====================================================
 */
 
 app.get("/api/pdf", async (req, res) => {
@@ -171,8 +167,6 @@ app.get("/api/pdf", async (req, res) => {
   console.log(shareUrl);
 
   if (!shareUrl) {
-    console.log("ERROR: Missing share URL");
-
     return res.status(400).json({
       success: false,
       message: "Missing My Cloud share URL",
@@ -180,8 +174,6 @@ app.get("/api/pdf", async (req, res) => {
   }
 
   if (!isValidShareUrl(shareUrl)) {
-    console.log("ERROR: Invalid My Cloud URL");
-
     return res.status(400).json({
       success: false,
       message: "Invalid My Cloud OS 5 share URL",
@@ -221,26 +213,24 @@ app.get("/api/pdf", async (req, res) => {
       userAgent,
 
       extraHTTPHeaders: {
-        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Language":
+          "en-US,en;q=0.9",
       },
     });
 
     const page = await context.newPage();
 
-    let authenticatedPdfUrl = null;
-
     /*
-    ------------------------------------------------
-    Watch My Cloud network requests
-    ------------------------------------------------
+    ==================================================
+    CAPTURE REQUEST URL
+    ==================================================
     */
 
-    page.on("response", (response) => {
-      try {
-        const url = response.url();
+    let authenticatedPdfUrl = null;
 
-        const contentType =
-          response.headers()["content-type"] || "";
+    page.on("request", (request) => {
+      try {
+        const url = request.url();
 
         if (
           url.includes("/sdk/v2/files/") &&
@@ -248,8 +238,52 @@ app.get("/api/pdf", async (req, res) => {
         ) {
           console.log("");
           console.log("------------------------------------------");
-          console.log(" MY CLOUD CONTENT RESPONSE");
+          console.log(" MY CLOUD CONTENT REQUEST");
           console.log("------------------------------------------");
+
+          console.log(
+            "Method:",
+            request.method()
+          );
+
+          console.log(
+            "URL:",
+            url
+          );
+
+          authenticatedPdfUrl = url;
+
+          console.log("");
+          console.log(
+            "AUTHENTICATED PDF REQUEST CAPTURED!"
+          );
+        }
+      } catch (error) {
+        console.log(
+          "Request listener error:",
+          error.message
+        );
+      }
+    });
+
+    /*
+    ==================================================
+    ALSO WATCH RESPONSES
+    ==================================================
+    */
+
+    page.on("response", (response) => {
+      try {
+        const url = response.url();
+
+        if (
+          url.includes("/sdk/v2/files/") &&
+          url.includes("/content")
+        ) {
+          console.log("");
+          console.log(
+            "MY CLOUD CONTENT RESPONSE:"
+          );
 
           console.log(
             "Status:",
@@ -258,22 +292,10 @@ app.get("/api/pdf", async (req, res) => {
 
           console.log(
             "Content-Type:",
-            contentType
+            response.headers()[
+              "content-type"
+            ] || ""
           );
-
-          if (
-            response.status() === 200 &&
-            contentType
-              .toLowerCase()
-              .includes("application/pdf")
-          ) {
-            authenticatedPdfUrl = url;
-
-            console.log("");
-            console.log(
-              "AUTHENTICATED PDF URL CAPTURED!"
-            );
-          }
         }
       } catch (error) {
         console.log(
@@ -284,13 +306,15 @@ app.get("/api/pdf", async (req, res) => {
     });
 
     /*
-    ------------------------------------------------
-    Open My Cloud
-    ------------------------------------------------
+    ==================================================
+    OPEN MY CLOUD
+    ==================================================
     */
 
     console.log("");
-    console.log("Opening My Cloud share...");
+    console.log(
+      "Opening My Cloud share..."
+    );
 
     try {
       await page.goto(shareUrl, {
@@ -307,21 +331,17 @@ app.get("/api/pdf", async (req, res) => {
         "Navigation warning:",
         error.message
       );
-
-      console.log(
-        "Continuing because My Cloud may still be loading..."
-      );
     }
 
     /*
-    ------------------------------------------------
-    Wait for authenticated PDF URL
-    ------------------------------------------------
+    ==================================================
+    WAIT FOR PDF REQUEST
+    ==================================================
     */
 
     console.log("");
     console.log(
-      "Waiting for My Cloud PDF URL..."
+      "Waiting for My Cloud PDF request..."
     );
 
     const startTime = Date.now();
@@ -335,22 +355,25 @@ app.get("/api/pdf", async (req, res) => {
 
     if (!authenticatedPdfUrl) {
       throw new Error(
-        "My Cloud did not generate an authenticated PDF URL within 90 seconds."
+        "My Cloud did not create the PDF content request within 90 seconds."
       );
     }
 
     console.log("");
     console.log("==========================================");
-    console.log(" AUTHENTICATED PDF URL FOUND");
+    console.log(
+      " AUTHENTICATED PDF URL FOUND"
+    );
     console.log("==========================================");
 
     /*
-    ------------------------------------------------
-    Get browser cookies
-    ------------------------------------------------
+    ==================================================
+    GET BROWSER COOKIES
+    ==================================================
     */
 
-    const cookies = await context.cookies();
+    const cookies =
+      await context.cookies();
 
     const cookieHeader = cookies
       .map(
@@ -366,27 +389,28 @@ app.get("/api/pdf", async (req, res) => {
     );
 
     /*
-    ------------------------------------------------
-    Download using Node HTTPS
-    ------------------------------------------------
+    ==================================================
+    DOWNLOAD PDF
+    ==================================================
     */
 
-    const pdfBuffer = await downloadPdf(
-      authenticatedPdfUrl,
-      cookieHeader,
-      userAgent
-    );
+    const pdfBuffer =
+      await downloadPdf(
+        authenticatedPdfUrl,
+        cookieHeader,
+        userAgent
+      );
 
     /*
-    ------------------------------------------------
-    Validate PDF
-    ------------------------------------------------
+    ==================================================
+    VALIDATE
+    ==================================================
     */
 
     console.log("");
-    console.log("------------------------------------------");
-    console.log(" VALIDATING PDF");
-    console.log("------------------------------------------");
+    console.log(
+      "Validating PDF..."
+    );
 
     const pdfHeader = pdfBuffer
       .subarray(0, 4)
@@ -398,17 +422,6 @@ app.get("/api/pdf", async (req, res) => {
     );
 
     if (pdfHeader !== "%PDF") {
-      console.log("");
-      console.log(
-        "First 100 bytes:"
-      );
-
-      console.log(
-        pdfBuffer
-          .subarray(0, 100)
-          .toString("utf8")
-      );
-
       throw new Error(
         "Downloaded content is not a valid PDF."
       );
@@ -416,7 +429,9 @@ app.get("/api/pdf", async (req, res) => {
 
     console.log("");
     console.log("==========================================");
-    console.log(" PDF DOWNLOADED SUCCESSFULLY");
+    console.log(
+      " PDF DOWNLOADED SUCCESSFULLY"
+    );
     console.log("==========================================");
 
     console.log(
@@ -430,9 +445,9 @@ app.get("/api/pdf", async (req, res) => {
     );
 
     /*
-    ------------------------------------------------
-    Send PDF to client
-    ------------------------------------------------
+    ==================================================
+    SEND PDF
+    ==================================================
     */
 
     res.status(200);
@@ -474,20 +489,18 @@ app.get("/api/pdf", async (req, res) => {
       "PDF SENT TO CLIENT SUCCESSFULLY."
     );
 
-    console.log("");
-
   } catch (error) {
     console.error("");
     console.error("==========================================");
-    console.error(" PDF SERVER ERROR");
+    console.error(
+      " PDF SERVER ERROR"
+    );
     console.error("==========================================");
 
     console.error(
       "Error:",
       error.message
     );
-
-    console.error("");
 
     if (!res.headersSent) {
       res.status(500).json({
@@ -517,15 +530,17 @@ app.get("/api/pdf", async (req, res) => {
 });
 
 /*
-----------------------------------------------------
+====================================================
 START SERVER
-----------------------------------------------------
+====================================================
 */
 
 app.listen(PORT, () => {
   console.log("");
   console.log("==========================================");
-  console.log(" Golden Dreams PDF Server");
+  console.log(
+    " Golden Dreams PDF Server"
+  );
   console.log("==========================================");
 
   console.log(
