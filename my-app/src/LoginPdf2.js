@@ -1,31 +1,30 @@
 import React, {
-  forwardRef,
-  useCallback,
   useEffect,
   useRef,
   useState,
+  useCallback,
 } from "react";
 
 import {
   Box,
   Typography,
   IconButton,
+  Button,
+  CircularProgress,
+  Alert,
   Tooltip,
-  Slider,
-  Stack,
-  Divider,
 } from "@mui/material";
 
 import {
-  ArrowBackIosNew,
-  ArrowForwardIos,
+  ChevronLeft,
+  ChevronRight,
   ZoomIn,
   ZoomOut,
-  RestartAlt,
   Fullscreen,
   FullscreenExit,
-  MenuBook,
   Download,
+  Refresh,
+  ArrowBack,
 } from "@mui/icons-material";
 
 import HTMLFlipBook from "react-pageflip";
@@ -33,9 +32,9 @@ import * as pdfjsLib from "pdfjs-dist";
 
 import "./LoginPdf2.css";
 
-// =====================================================
-// CONFIG
-// =====================================================
+/* =========================================================
+   API CONFIG
+========================================================= */
 
 const DATA_API =
   "https://script.google.com/macros/s/AKfycbxNG3fuMW_DivRzBfhcPdwcJ3MTBgHOic1AhkWiMNhsXDq56a77Rg7UP4PpjeVQ116tbA/exec";
@@ -43,75 +42,47 @@ const DATA_API =
 const PDF_PROXY =
   "https://goldendreams.onrender.com/api/pdf";
 
-// =====================================================
-// PDF.JS WORKER
-// =====================================================
+/* =========================================================
+   PDF.JS WORKER
+========================================================= */
 
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 
-// =====================================================
-// FLIP PAGE
-// =====================================================
+/* =========================================================
+   COMPONENT
+========================================================= */
 
-const FlipPage = forwardRef(
-  ({ src, pageNumber }, ref) => {
-    return (
-      <div
-        ref={ref}
-        className="pdf-book-page"
-      >
-        {src ? (
-          <img
-            src={src}
-            alt={`PDF page ${pageNumber}`}
-            draggable={false}
-          />
-        ) : (
-          <div className="page-placeholder">
-            <div className="small-loader" />
-          </div>
-        )}
+const LoginPdf2 = () => {
 
-        <div className="page-number">
-          {pageNumber}
-        </div>
-      </div>
-    );
-  }
-);
-
-FlipPage.displayName = "FlipPage";
-
-
-// =====================================================
-// MAIN
-// =====================================================
-
-export default function LoginPdf2() {
+  /* =======================================================
+     USER
+  ======================================================= */
 
   const username =
-    (
-      localStorage.getItem("username") ||
-      ""
-    ).trim();
+    localStorage.getItem("username") || "";
 
 
-  // ===================================================
-  // ALBUM DATA
-  // ===================================================
+  /* =======================================================
+     ALBUM STATE
+  ======================================================= */
 
-  const [albums, setAlbums] =
-    useState([]);
+  const [albums, setAlbums] = useState([]);
 
-  const [currentAlbum, setCurrentAlbum] =
-    useState(0);
+  const [selectedPDF, setSelectedPDF] =
+    useState("");
+
+  const [selectedHeading, setSelectedHeading] =
+    useState("");
 
 
-  // ===================================================
-  // PDF STATE
-  // ===================================================
+  /* =======================================================
+     PDF STATE
+  ======================================================= */
+
+  const [pdf, setPdf] =
+    useState(null);
 
   const [pages, setPages] =
     useState([]);
@@ -122,41 +93,48 @@ export default function LoginPdf2() {
   const [currentPage, setCurrentPage] =
     useState(0);
 
+
+  /* =======================================================
+     LOADING / ERROR
+  ======================================================= */
+
   const [loading, setLoading] =
-    useState(true);
+    useState(false);
 
   const [loadingText, setLoadingText] =
-    useState("Loading Digital Album...");
+    useState("");
 
   const [error, setError] =
     useState("");
 
+  const [retryKey, setRetryKey] =
+    useState(0);
 
-  // ===================================================
-  // DESIGN STATE
-  // ===================================================
+
+  /* =======================================================
+     ZOOM
+  ======================================================= */
 
   const [zoom, setZoom] =
     useState(1);
 
-  const [fullscreen, setFullscreen] =
+
+  /* =======================================================
+     FULLSCREEN
+  ======================================================= */
+
+  const [isFullscreen, setIsFullscreen] =
     useState(false);
 
 
-  // ===================================================
-  // REFS
-  // ===================================================
+  /* =======================================================
+     REFS
+  ======================================================= */
 
-  const bookRef =
+  const flipBookRef =
     useRef(null);
 
-  const viewerRef =
-    useRef(null);
-
-  const pdfDocumentRef =
-    useRef(null);
-
-  const loadingTaskRef =
+  const containerRef =
     useRef(null);
 
   const abortControllerRef =
@@ -165,419 +143,681 @@ export default function LoginPdf2() {
   const pdfBlobCacheRef =
     useRef(new Map());
 
+  const pdfBytesCacheRef =
+    useRef(new Map());
+
   const renderedPageCacheRef =
     useRef(new Map());
 
-  const renderingPagesRef =
-    useRef(new Set());
 
-  const requestIdRef =
-    useRef(0);
+  /* =======================================================
+     LOAD ALBUM LIST
+  ======================================================= */
 
-  const objectUrlRef =
-    useRef(null);
+  useEffect(() => {
 
+    let cancelled = false;
 
-  // ===================================================
-  // SELECTED ALBUM
-  // ===================================================
-
-  const selectedAlbum =
-    albums[currentAlbum];
-
-  const selectedPDF =
-    selectedAlbum?.pdf || "";
-
-  const selectedHeading =
-    selectedAlbum?.heading ||
-    "Digital Album";
-
-
-  // ===================================================
-  // CLEAN PDF
-  // ===================================================
-
-  const cleanupPdf =
-    useCallback(() => {
-
-      // -----------------------------------------------
-      // Destroy loading task
-      // -----------------------------------------------
+    const loadAlbums = async () => {
 
       try {
 
-        if (loadingTaskRef.current) {
+        setLoading(true);
+        setLoadingText("Loading albums...");
+        setError("");
 
-          loadingTaskRef.current.destroy();
-
-          loadingTaskRef.current = null;
-
-        }
-
-      } catch (err) {
-
-        console.warn(
-          "Loading task cleanup:",
-          err
-        );
-
-      }
-
-
-      // -----------------------------------------------
-      // Destroy PDF document
-      // -----------------------------------------------
-
-      try {
-
-        if (pdfDocumentRef.current) {
-
-          pdfDocumentRef.current.destroy();
-
-          pdfDocumentRef.current = null;
-
-        }
-
-      } catch (err) {
-
-        console.warn(
-          "PDF cleanup:",
-          err
-        );
-
-      }
-
-
-      // -----------------------------------------------
-      // Revoke old object URL if any
-      // -----------------------------------------------
-
-      if (objectUrlRef.current) {
-
-        try {
-
-          URL.revokeObjectURL(
-            objectUrlRef.current
+        const response =
+          await fetch(
+            `${DATA_API}?t=${Date.now()}`,
+            {
+              cache: "no-store",
+            }
           );
 
-        } catch {}
+        if (!response.ok) {
+          throw new Error(
+            `Album API Error: ${response.status}`
+          );
+        }
 
-        objectUrlRef.current = null;
+        const data =
+          await response.json();
+
+        if (cancelled) return;
+
+        const userAlbums =
+          Array.isArray(data)
+            ? data
+                .filter((item) => {
+
+                  const apiUser =
+                    String(
+                      item?.UserName || ""
+                    )
+                      .trim()
+                      .toLowerCase();
+
+                  return (
+                    apiUser ===
+                    String(username)
+                      .trim()
+                      .toLowerCase()
+                  );
+                })
+                .map((item) => ({
+                  heading:
+                    item?.heading2 || "Digital Album",
+
+                  pdf:
+                    item?.pdf2 || "",
+                }))
+                .filter(
+                  (item) => item.pdf
+                )
+            : [];
+
+        setAlbums(userAlbums);
+
+      } catch (err) {
+
+        console.error(
+          "Album API Error:",
+          err
+        );
+
+        if (!cancelled) {
+
+          setError(
+            "Unable to load your albums."
+          );
+
+        }
+
+      } finally {
+
+        if (!cancelled) {
+
+          setLoading(false);
+
+        }
 
       }
 
-    }, []);
+    };
+
+    loadAlbums();
+
+    return () => {
+      cancelled = true;
+    };
+
+  }, [username, retryKey]);
 
 
-  // ===================================================
-  // ABORT REQUEST
-  // ===================================================
+  /* =======================================================
+     SELECT ALBUM
+  ======================================================= */
 
-  const abortCurrentRequest =
-    useCallback(() => {
+  const selectAlbum = useCallback(
+    (album) => {
+
+      if (!album?.pdf) return;
+
+      setSelectedPDF(album.pdf);
+      setSelectedHeading(
+        album.heading || "Digital Album"
+      );
+
+      setPdf(null);
+      setPages([]);
+      setTotalPages(0);
+      setCurrentPage(0);
+      setZoom(1);
+      setError("");
+
+    },
+    []
+  );
+
+
+  /* =======================================================
+     DOWNLOAD PDF FROM RENDER
+  ======================================================= */
+
+  const downloadPDF = useCallback(
+    async (albumKey) => {
+
+      if (!albumKey) {
+        throw new Error(
+          "PDF link is missing."
+        );
+      }
+
+
+      /* ---------------------------------------------------
+         CACHE CHECK
+      --------------------------------------------------- */
+
+      if (
+        pdfBytesCacheRef.current.has(
+          albumKey
+        )
+      ) {
+
+        console.log(
+          "PDF found in byte cache."
+        );
+
+        return {
+          bytes:
+            pdfBytesCacheRef.current.get(
+              albumKey
+            ),
+
+          blob:
+            pdfBlobCacheRef.current.get(
+              albumKey
+            ),
+        };
+
+      }
+
+
+      /* ---------------------------------------------------
+         ABORT PREVIOUS REQUEST
+      --------------------------------------------------- */
 
       if (
         abortControllerRef.current
       ) {
 
-        try {
-
-          abortControllerRef.current.abort();
-
-        } catch {}
-
-        abortControllerRef.current = null;
+        abortControllerRef.current.abort();
 
       }
 
-    }, []);
+      const controller =
+        new AbortController();
 
+      abortControllerRef.current =
+        controller;
 
-  // ===================================================
-  // GET ALBUM DATA
-  // ===================================================
 
-  useEffect(() => {
+      /* ---------------------------------------------------
+         PROXY URL
+      --------------------------------------------------- */
 
-    let mounted = true;
+      const proxyUrl =
+        `${PDF_PROXY}?url=${encodeURIComponent(
+          albumKey
+        )}`;
 
 
-    const getAlbums =
-      async () => {
+      console.log(
+        "================================="
+      );
 
-        try {
+      console.log(
+        "Downloading PDF..."
+      );
 
-          setLoading(true);
-
-          setLoadingText(
-            "Loading Digital Albums..."
-          );
-
-          setError("");
-
-
-          // -------------------------------------------
-          // CHECK LOGIN
-          // -------------------------------------------
-
-          if (!username) {
-
-            setError(
-              "User session not found."
-            );
-
-            setAlbums([]);
-
-            setLoading(false);
-
-            return;
-
-          }
-
-
-          // -------------------------------------------
-          // GET GOOGLE SHEET DATA
-          // -------------------------------------------
-
-          const response =
-            await fetch(
-              DATA_API,
-              {
-                cache: "no-store",
-              }
-            );
-
-
-          if (!response.ok) {
-
-            throw new Error(
-              `API Error: ${response.status}`
-            );
-
-          }
-
-
-          const jsonData =
-            await response.json();
-
-
-          if (
-            !Array.isArray(jsonData)
-          ) {
-
-            throw new Error(
-              "Invalid API response."
-            );
-
-          }
-
-
-          // -------------------------------------------
-          // FILTER USER
-          // -------------------------------------------
-
-          const filtered =
-            jsonData.filter(
-              (item) => {
-
-                const apiUsername =
-                  String(
-                    item?.UserName || ""
-                  ).trim();
-
-
-                return (
-                  apiUsername.toLowerCase() ===
-                  username.toLowerCase()
-                );
-
-              }
-            );
-
-
-          // -------------------------------------------
-          // CREATE ALBUM LIST
-          // -------------------------------------------
-
-          const albumList =
-            filtered
-              .map((item) => ({
-
-                heading:
-                  String(
-                    item?.heading2 ||
-                    "Digital Album"
-                  ).trim(),
-
-                pdf:
-                  String(
-                    item?.pdf2 || ""
-                  ).trim(),
-
-              }))
-              .filter(
-                (item) => item.pdf
-              );
-
-
-          if (!mounted)
-            return;
-
-
-          setAlbums(albumList);
-
-          setCurrentAlbum(0);
-
-
-          // -------------------------------------------
-          // NO ALBUM
-          // -------------------------------------------
-
-          if (
-            albumList.length === 0
-          ) {
-
-            setError(
-              "No digital albums were found."
-            );
-
-          }
-
-
-          setLoading(false);
-
-        } catch (err) {
-
-          console.error(
-            "Album API Error:",
-            err
-          );
-
-
-          if (!mounted)
-            return;
-
-
-          setAlbums([]);
-
-          setError(
-            err?.message ||
-            "Unable to load albums."
-          );
-
-          setLoading(false);
-
-        }
-
-      };
-
-
-    getAlbums();
-
-
-    return () => {
-
-      mounted = false;
-
-    };
-
-  }, [username]);
-
-
-  // ===================================================
-  // CREATE PAGE IMAGE
-  // ===================================================
-
-  const renderPage =
-    useCallback(
-      async (
-        pdf,
-        pageNumber,
+      console.log(
+        "My Cloud Share URL:",
         albumKey
-      ) => {
+      );
 
-        // ---------------------------------------------
-        // CHECK PAGE CACHE
-        // ---------------------------------------------
+      console.log(
+        "Render PDF Proxy:",
+        PDF_PROXY
+      );
 
-        const albumCache =
-          renderedPageCacheRef.current.get(
-            albumKey
-          );
+      console.log(
+        "PDF Proxy URL:",
+        proxyUrl
+      );
 
-
-        if (
-          albumCache?.has(pageNumber)
-        ) {
-
-          return albumCache.get(
-            pageNumber
-          );
-
-        }
+      console.log(
+        "================================="
+      );
 
 
-        // ---------------------------------------------
-        // PREVENT DUPLICATE RENDER
-        // ---------------------------------------------
-
-        const renderKey =
-          `${albumKey}-${pageNumber}`;
+      setLoadingText(
+        "Connecting to PDF server..."
+      );
 
 
-        if (
-          renderingPagesRef.current.has(
-            renderKey
-          )
-        ) {
+      /* ---------------------------------------------------
+         FETCH PDF
+      --------------------------------------------------- */
 
-          return null;
+      const response =
+        await fetch(
+          proxyUrl,
+          {
+            method: "GET",
 
-        }
+            signal:
+              controller.signal,
 
+            cache: "no-store",
 
-        renderingPagesRef.current.add(
-          renderKey
+            headers: {
+              Accept:
+                "application/pdf",
+            },
+          }
         );
 
 
+      console.log(
+        "PDF HTTP Status:",
+        response.status
+      );
+
+
+      /* ---------------------------------------------------
+         HTTP ERROR
+      --------------------------------------------------- */
+
+      if (!response.ok) {
+
+        let serverMessage = "";
+
         try {
 
-          // -------------------------------------------
-          // GET PDF PAGE
-          // -------------------------------------------
+          const text =
+            await response.text();
+
+          serverMessage =
+            text.substring(0, 500);
+
+        } catch (_) {}
+
+        throw new Error(
+          `PDF Server Error: ${response.status}${
+            serverMessage
+              ? ` - ${serverMessage}`
+              : ""
+          }`
+        );
+
+      }
+
+
+      /* ---------------------------------------------------
+         CONTENT TYPE
+      --------------------------------------------------- */
+
+      const contentType =
+        response.headers.get(
+          "content-type"
+        ) || "";
+
+      console.log(
+        "PDF Content-Type:",
+        contentType
+      );
+
+
+      if (
+        !contentType
+          .toLowerCase()
+          .includes("application/pdf")
+      ) {
+
+        throw new Error(
+          `Invalid PDF response. Content-Type: ${contentType}`
+        );
+
+      }
+
+
+      /* ---------------------------------------------------
+         CONTENT LENGTH
+      --------------------------------------------------- */
+
+      console.log(
+        "PDF Content-Length:",
+        response.headers.get(
+          "content-length"
+        )
+      );
+
+
+      console.log(
+        "PDF Transfer-Encoding:",
+        response.headers.get(
+          "transfer-encoding"
+        )
+      );
+
+
+      setLoadingText(
+        "Downloading PDF..."
+      );
+
+
+      /* ===================================================
+         IMPORTANT FIX
+         
+         Read response ONCE.
+         Do NOT do:
+         
+         response.arrayBuffer()
+         -> Blob
+         -> blob.arrayBuffer()
+         
+         because this can create unnecessary
+         memory copies for an 80 MB PDF.
+      =================================================== */
+
+      const arrayBuffer =
+        await response.arrayBuffer();
+
+
+      console.log(
+        "PDF ArrayBuffer bytes:",
+        arrayBuffer.byteLength
+      );
+
+
+      /* ---------------------------------------------------
+         EMPTY PDF CHECK
+      --------------------------------------------------- */
+
+      if (
+        !arrayBuffer ||
+        arrayBuffer.byteLength === 0
+      ) {
+
+        throw new Error(
+          "Empty PDF received from PDF server."
+        );
+
+      }
+
+
+      /* ---------------------------------------------------
+         SIZE
+      --------------------------------------------------- */
+
+      const sizeMB =
+        (
+          arrayBuffer.byteLength /
+          1024 /
+          1024
+        ).toFixed(2);
+
+
+      console.log(
+        `PDF received: ${sizeMB} MB`
+      );
+
+
+      /* ---------------------------------------------------
+         BASIC PDF HEADER CHECK
+      --------------------------------------------------- */
+
+      const headerBytes =
+        new Uint8Array(
+          arrayBuffer.slice(
+            0,
+            5
+          )
+        );
+
+      const header =
+        String.fromCharCode(
+          ...headerBytes
+        );
+
+
+      console.log(
+        "PDF Header:",
+        header
+      );
+
+
+      if (
+        header !== "%PDF-"
+      ) {
+
+        throw new Error(
+          "The server response is not a valid PDF file."
+        );
+
+      }
+
+
+      /* ---------------------------------------------------
+         CREATE BYTES
+      --------------------------------------------------- */
+
+      const pdfBytes =
+        new Uint8Array(
+          arrayBuffer
+        );
+
+
+      /* ---------------------------------------------------
+         CACHE BYTES
+      --------------------------------------------------- */
+
+      pdfBytesCacheRef.current.set(
+        albumKey,
+        pdfBytes
+      );
+
+
+      /* ---------------------------------------------------
+         CREATE BLOB ONLY ONCE
+      --------------------------------------------------- */
+
+      const blob =
+        new Blob(
+          [arrayBuffer],
+          {
+            type:
+              "application/pdf",
+          }
+        );
+
+
+      pdfBlobCacheRef.current.set(
+        albumKey,
+        blob
+      );
+
+
+      console.log(
+        `Sending PDF to PDF.js: ${sizeMB} MB`
+      );
+
+
+      return {
+        bytes: pdfBytes,
+        blob,
+      };
+
+    },
+    []
+  );
+
+
+  /* =======================================================
+     LOAD PDF
+  ======================================================= */
+
+  useEffect(() => {
+
+    if (!selectedPDF) return;
+
+
+    let cancelled = false;
+
+    const loadPDF = async () => {
+
+      try {
+
+        setLoading(true);
+
+        setLoadingText(
+          "Preparing digital album..."
+        );
+
+        setError("");
+
+        setPages([]);
+
+        setPdf(null);
+
+        setTotalPages(0);
+
+        setCurrentPage(0);
+
+
+        /* -------------------------------------------------
+           DOWNLOAD
+        ------------------------------------------------- */
+
+        const result =
+          await downloadPDF(
+            selectedPDF
+          );
+
+
+        if (cancelled) return;
+
+
+        const pdfBytes =
+          result.bytes;
+
+
+        /* -------------------------------------------------
+           PDF.JS
+        ------------------------------------------------- */
+
+        setLoadingText(
+          "Opening digital album..."
+        );
+
+
+        console.log(
+          "Loading PDF with PDF.js..."
+        );
+
+
+        const loadingTask =
+          pdfjsLib.getDocument({
+            data: pdfBytes,
+          });
+
+
+        const loadedPdf =
+          await loadingTask.promise;
+
+
+        if (cancelled) {
+
+          try {
+            await loadedPdf.destroy();
+          } catch (_) {}
+
+          return;
+
+        }
+
+
+        console.log(
+          "PDF loaded successfully."
+        );
+
+        console.log(
+          "Total pages:",
+          loadedPdf.numPages
+        );
+
+
+        setPdf(
+          loadedPdf
+        );
+
+        setTotalPages(
+          loadedPdf.numPages
+        );
+
+
+        /* -------------------------------------------------
+           RENDER PAGES
+        ------------------------------------------------- */
+
+        const renderedPages = [];
+
+
+        for (
+          let pageNumber = 1;
+          pageNumber <=
+          loadedPdf.numPages;
+          pageNumber++
+        ) {
+
+          if (cancelled) {
+            break;
+          }
+
+
+          setLoadingText(
+            `Preparing page ${pageNumber} of ${loadedPdf.numPages}...`
+          );
+
+
+          const cacheKey =
+            `${selectedPDF}__${pageNumber}__${zoom}`;
+
+
+          if (
+            renderedPageCacheRef.current.has(
+              cacheKey
+            )
+          ) {
+
+            renderedPages.push(
+              renderedPageCacheRef.current.get(
+                cacheKey
+              )
+            );
+
+            continue;
+
+          }
+
 
           const page =
-            await pdf.getPage(
+            await loadedPdf.getPage(
               pageNumber
             );
 
 
-          // -------------------------------------------
-          // PAGE VIEWPORT
-          // -------------------------------------------
+          /* ---------------------------------------------
+             SCALE
+          --------------------------------------------- */
+
+          const baseScale =
+            1.25 * zoom;
+
 
           const viewport =
             page.getViewport({
-              scale: 1.25,
+              scale: baseScale,
             });
 
-
-          // -------------------------------------------
-          // DEVICE PIXEL RATIO
-          // -------------------------------------------
 
           const dpr =
             Math.min(
               window.devicePixelRatio ||
-              1,
+                1,
               1.5
             );
 
-
-          // -------------------------------------------
-          // CREATE CANVAS
-          // -------------------------------------------
 
           const canvas =
             document.createElement(
@@ -594,20 +834,10 @@ export default function LoginPdf2() {
             );
 
 
-          if (!context) {
-
-            throw new Error(
-              "Unable to create canvas context."
-            );
-
-          }
-
-
           canvas.width =
             Math.floor(
               viewport.width * dpr
             );
-
 
           canvas.height =
             Math.floor(
@@ -615,32 +845,36 @@ export default function LoginPdf2() {
             );
 
 
-          // -------------------------------------------
-          // RENDER PDF PAGE
-          // -------------------------------------------
+          canvas.style.width =
+            `${viewport.width}px`;
+
+          canvas.style.height =
+            `${viewport.height}px`;
+
 
           await page.render({
-
             canvasContext:
               context,
 
             viewport,
 
-            transform: [
-              dpr,
-              0,
-              0,
-              dpr,
-              0,
-              0,
-            ],
-
+            transform:
+              dpr !== 1
+                ? [
+                    dpr,
+                    0,
+                    0,
+                    dpr,
+                    0,
+                    0,
+                  ]
+                : null,
           }).promise;
 
 
-          // -------------------------------------------
-          // CONVERT CANVAS TO IMAGE
-          // -------------------------------------------
+          /* ---------------------------------------------
+             JPEG PAGE IMAGE
+          --------------------------------------------- */
 
           const image =
             canvas.toDataURL(
@@ -649,481 +883,51 @@ export default function LoginPdf2() {
             );
 
 
-          // -------------------------------------------
-          // SAVE PAGE CACHE
-          // -------------------------------------------
-
-          if (!albumCache) {
-
-            renderedPageCacheRef.current.set(
-              albumKey,
-              new Map([
-                [
-                  pageNumber,
-                  image,
-                ],
-              ])
-            );
-
-          } else {
-
-            albumCache.set(
-              pageNumber,
-              image
-            );
-
-          }
+          renderedPageCacheRef.current.set(
+            cacheKey,
+            image
+          );
 
 
-          // -------------------------------------------
-          // CLEAN CANVAS
-          // -------------------------------------------
+          renderedPages.push(
+            image
+          );
+
+
+          /* ---------------------------------------------
+             RELEASE CANVAS
+          --------------------------------------------- */
 
           canvas.width = 1;
           canvas.height = 1;
 
 
-          return image;
+          /* ---------------------------------------------
+             ALLOW BROWSER TO BREATHE
+          --------------------------------------------- */
 
-        } finally {
+          if (
+            pageNumber % 2 === 0
+          ) {
 
-          renderingPagesRef.current.delete(
-            renderKey
-          );
+            await new Promise(
+              (resolve) =>
+                setTimeout(
+                  resolve,
+                  10
+                )
+            );
+
+          }
 
         }
 
-      },
-      []
-    );
 
-
-  // ===================================================
-  // LOAD PDF
-  // ===================================================
-
-  const loadPDF =
-    useCallback(
-      async (
-        shareUrl,
-        heading
-      ) => {
-
-        if (!shareUrl)
-          return;
-
-
-        const albumKey =
-          shareUrl.trim();
-
-
-        if (!albumKey)
-          return;
-
-
-        const requestId =
-          ++requestIdRef.current;
-
-
-        // ---------------------------------------------
-        // CANCEL PREVIOUS REQUEST
-        // ---------------------------------------------
-
-        abortCurrentRequest();
-
-        cleanupPdf();
-
-
-        const controller =
-          new AbortController();
-
-
-        abortControllerRef.current =
-          controller;
-
-
-        setError("");
-
-        setLoading(true);
-
-        setLoadingText(
-          "Connecting to Digital Album..."
-        );
-
-
-        try {
-
-          let blob =
-            pdfBlobCacheRef.current.get(
-              albumKey
-            );
-
-
-          // =========================================
-          // DOWNLOAD PDF
-          // =========================================
-
-          if (!blob) {
-
-            console.log(
-              "================================="
-            );
-
-            console.log(
-              "Downloading PDF..."
-            );
-
-            console.log(
-              "My Cloud Share URL:",
-              albumKey
-            );
-
-            console.log(
-              "Render PDF Proxy:",
-              PDF_PROXY
-            );
-
-
-            const proxyUrl =
-              `${PDF_PROXY}?url=${encodeURIComponent(
-                albumKey
-              )}`;
-
-
-            console.log(
-              "PDF Proxy URL:",
-              proxyUrl
-            );
-
-
-            // -----------------------------------------
-            // FETCH FROM RENDER
-            // -----------------------------------------
-
-            const response =
-              await fetch(
-                proxyUrl,
-                {
-                  signal:
-                    controller.signal,
-
-                  cache:
-                    "no-store",
-                }
-              );
-
-
-            // -----------------------------------------
-            // REQUEST CANCELLED
-            // -----------------------------------------
-
-            if (
-              controller.signal.aborted ||
-              requestId !==
-                requestIdRef.current
-            ) {
-
-              return;
-
-            }
-
-
-            // -----------------------------------------
-            // HTTP ERROR
-            // -----------------------------------------
-
-            if (!response.ok) {
-
-              throw new Error(
-                `PDF Server Error: ${response.status}`
-              );
-
-            }
-
-
-            // -----------------------------------------
-            // CHECK CONTENT TYPE
-            // -----------------------------------------
-
-            const contentType =
-              response.headers.get(
-                "content-type"
-              ) || "";
-
-
-            console.log(
-              "PDF Content-Type:",
-              contentType
-            );
-
-
-            if (
-              !contentType
-                .toLowerCase()
-                .includes(
-                  "application/pdf"
-                )
-            ) {
-
-              throw new Error(
-                `Invalid PDF response. Content-Type: ${contentType}`
-              );
-
-            }
-
-
-            setLoadingText(
-              "Receiving Digital Album..."
-            );
-
-
-            // -----------------------------------------
-            // READ PDF AS ARRAY BUFFER
-            // -----------------------------------------
-
-            const arrayBuffer =
-              await response.arrayBuffer();
-
-
-            // -----------------------------------------
-            // CHECK AGAIN
-            // -----------------------------------------
-
-            if (
-              controller.signal.aborted ||
-              requestId !==
-                requestIdRef.current
-            ) {
-
-              return;
-
-            }
-
-
-            if (
-              !arrayBuffer ||
-              arrayBuffer.byteLength === 0
-            ) {
-
-              throw new Error(
-                "Empty PDF received."
-              );
-
-            }
-
-
-            console.log(
-              "PDF received:",
-              (
-                arrayBuffer.byteLength /
-                1024 /
-                1024
-              ).toFixed(2),
-              "MB"
-            );
-
-
-            // -----------------------------------------
-            // CREATE BLOB FOR DOWNLOAD
-            // -----------------------------------------
-
-            blob =
-              new Blob(
-                [arrayBuffer],
-                {
-                  type:
-                    "application/pdf",
-                }
-              );
-
-
-            // -----------------------------------------
-            // CACHE PDF
-            // -----------------------------------------
-
-            pdfBlobCacheRef.current.set(
-              albumKey,
-              blob
-            );
-
-          } else {
-
-            console.log(
-              "Using cached PDF."
-            );
-
-          }
-
-
-          // =========================================
-          // PDF.JS
-          // =========================================
-
-          setLoadingText(
-            "Opening Digital Album..."
-          );
-
-
-          // -----------------------------------------
-          // GET ARRAY BUFFER FROM BLOB
-          // -----------------------------------------
-
-          const arrayBuffer =
-            await blob.arrayBuffer();
-
-
-          if (
-            controller.signal.aborted ||
-            requestId !==
-              requestIdRef.current
-          ) {
-
-            return;
-
-          }
-
-
-          console.log(
-            "Sending PDF to PDF.js:",
-            (
-              arrayBuffer.byteLength /
-              1024 /
-              1024
-            ).toFixed(2),
-            "MB"
-          );
-
-
-          // -----------------------------------------
-          // CREATE PDF.JS LOADING TASK
-          // -----------------------------------------
-
-          const loadingTask =
-            pdfjsLib.getDocument({
-              data:
-                new Uint8Array(
-                  arrayBuffer
-                ),
-
-              disableAutoFetch:
-                false,
-
-              disableStream:
-                false,
-            });
-
-
-          loadingTaskRef.current =
-            loadingTask;
-
-
-          // -----------------------------------------
-          // LOAD PDF
-          // -----------------------------------------
-
-          const pdf =
-            await loadingTask.promise;
-
-
-          if (
-            controller.signal.aborted ||
-            requestId !==
-              requestIdRef.current
-          ) {
-
-            return;
-
-          }
-
-
-          console.log(
-            "PDF loaded successfully."
-          );
-
-
-          console.log(
-            "Total pages:",
-            pdf.numPages
-          );
-
-
-          pdfDocumentRef.current =
-            pdf;
-
-
-          const count =
-            pdf.numPages;
-
-
-          setTotalPages(
-            count
-          );
-
-
-          // =========================================
-          // CREATE EMPTY PAGE ARRAY
-          // =========================================
-
-          const emptyPages =
-            Array.from(
-              {
-                length: count,
-              },
-              () => null
-            );
-
+        if (!cancelled) {
 
           setPages(
-            emptyPages
+            renderedPages
           );
-
-
-          // =========================================
-          // FIRST PAGE
-          // =========================================
-
-          setLoadingText(
-            "Preparing first page..."
-          );
-
-
-          const firstPage =
-            await renderPage(
-              pdf,
-              1,
-              albumKey
-            );
-
-
-          if (
-            controller.signal.aborted ||
-            requestId !==
-              requestIdRef.current
-          ) {
-
-            return;
-
-          }
-
-
-          if (firstPage) {
-
-            setPages(
-              previous => {
-
-                const next =
-                  [...previous];
-
-                next[0] =
-                  firstPage;
-
-                return next;
-
-              }
-            );
-
-          }
-
 
           setCurrentPage(0);
 
@@ -1131,326 +935,83 @@ export default function LoginPdf2() {
 
           setLoadingText("");
 
+        }
 
-          // =========================================
-          // BACKGROUND RENDERING
-          // =========================================
+      } catch (err) {
 
-          setTimeout(
-            async () => {
+        if (
+          err?.name ===
+          "AbortError"
+        ) {
 
-              try {
+          return;
 
-                if (
-                  controller.signal.aborted ||
-                  requestId !==
-                    requestIdRef.current
-                ) {
+        }
 
-                  return;
 
-                }
+        console.error(
+          "================================="
+        );
 
+        console.error(
+          "PDF ERROR"
+        );
 
-                // -----------------------------------
-                // FIRST EXTRA PAGES
-                // -----------------------------------
+        console.error(
+          err
+        );
 
-                for (
-                  let page = 2;
-                  page <=
-                    Math.min(
-                      count,
-                      3
-                    );
-                  page++
-                ) {
+        console.error(
+          "================================="
+        );
 
-                  if (
-                    controller.signal.aborted ||
-                    requestId !==
-                      requestIdRef.current
-                  ) {
 
-                    return;
-
-                  }
-
-
-                  const image =
-                    await renderPage(
-                      pdf,
-                      page,
-                      albumKey
-                    );
-
-
-                  if (image) {
-
-                    setPages(
-                      previous => {
-
-                        const next =
-                          [...previous];
-
-                        next[page - 1] =
-                          image;
-
-                        return next;
-
-                      }
-                    );
-
-                  }
-
-                }
-
-
-                // -----------------------------------
-                // REMAINING PAGES
-                // -----------------------------------
-
-                for (
-                  let page = 4;
-                  page <= count;
-                  page++
-                ) {
-
-                  if (
-                    controller.signal.aborted ||
-                    requestId !==
-                      requestIdRef.current
-                  ) {
-
-                    return;
-
-                  }
-
-
-                  const image =
-                    await renderPage(
-                      pdf,
-                      page,
-                      albumKey
-                    );
-
-
-                  if (image) {
-
-                    setPages(
-                      previous => {
-
-                        const next =
-                          [...previous];
-
-                        next[page - 1] =
-                          image;
-
-                        return next;
-
-                      }
-                    );
-
-                  }
-
-
-                  // Small delay prevents
-                  // browser from freezing
-
-                  await new Promise(
-                    resolve =>
-                      setTimeout(
-                        resolve,
-                        10
-                      )
-                  );
-
-                }
-
-              } catch (backgroundError) {
-
-                console.error(
-                  "Background page rendering error:",
-                  backgroundError
-                );
-
-              }
-
-            },
-            50
-          );
-
-        } catch (err) {
-
-          // -------------------------------------------
-          // IGNORE ABORTED REQUEST
-          // -------------------------------------------
-
-          if (
-            controller.signal.aborted ||
-            requestId !==
-              requestIdRef.current
-          ) {
-
-            return;
-
-          }
-
-
-          console.error(
-            "================================="
-          );
-
-          console.error(
-            "PDF ERROR"
-          );
-
-          console.error(
-            err
-          );
-
-          console.error(
-            "================================="
-          );
-
-
-          setPages([]);
-
-          setTotalPages(0);
-
-
-          // -------------------------------------------
-          // FRIENDLY ERROR
-          // -------------------------------------------
-
-          let errorMessage =
-            err?.message ||
-            "Unable to load PDF.";
-
-
-          if (
-            errorMessage
-              .toLowerCase()
-              .includes(
-                "failed to fetch"
-              )
-          ) {
-
-            errorMessage =
-              "Unable to connect to the PDF server. Please check your internet connection or try again.";
-
-          }
-
+        if (!cancelled) {
 
           setError(
-            errorMessage
+            err?.message ||
+              "Unable to open PDF."
           );
 
           setLoading(false);
 
-        } finally {
-
-          if (
-            abortControllerRef.current ===
-            controller
-          ) {
-
-            abortControllerRef.current =
-              null;
-
-          }
+          setLoadingText("");
 
         }
 
-      },
-      [
-        abortCurrentRequest,
-        cleanupPdf,
-        renderPage,
-      ]
-    );
+      }
+
+    };
 
 
-  // ===================================================
-  // LOAD SELECTED PDF
-  // ===================================================
-
-  useEffect(() => {
-
-    if (!selectedPDF)
-      return;
-
-
-    loadPDF(
-      selectedPDF,
-      selectedHeading
-    );
+    loadPDF();
 
 
     return () => {
 
-      abortCurrentRequest();
+      cancelled = true;
 
     };
 
   }, [
     selectedPDF,
-    selectedHeading,
-    loadPDF,
-    abortCurrentRequest,
+    downloadPDF,
   ]);
 
 
-  // ===================================================
-  // CHANGE ALBUM
-  // ===================================================
-
-  const changeAlbum =
-    index => {
-
-      if (
-        index === currentAlbum
-      ) {
-
-        return;
-
-      }
-
-
-      abortCurrentRequest();
-
-
-      setCurrentAlbum(index);
-
-      setPages([]);
-
-      setTotalPages(0);
-
-      setCurrentPage(0);
-
-      setZoom(1);
-
-      setError("");
-
-      setLoading(true);
-
-      setLoadingText(
-        "Opening Digital Album..."
-      );
-
-    };
-
-
-  // ===================================================
-  // PAGE FLIP
-  // ===================================================
+  /* =======================================================
+     PAGE FLIP
+  ======================================================= */
 
   const handleFlip =
     useCallback(
-      event => {
+      (e) => {
+
+        const page =
+          e?.data ?? 0;
 
         setCurrentPage(
-          event.data || 0
+          page
         );
 
       },
@@ -1458,84 +1019,98 @@ export default function LoginPdf2() {
     );
 
 
-  // ===================================================
-  // NAVIGATION
-  // ===================================================
-
-  const nextPage =
-    () => {
-
-      if (!bookRef.current)
-        return;
-
-
-      bookRef.current
-        .pageFlip()
-        .flipNext();
-
-    };
-
+  /* =======================================================
+     PREVIOUS PAGE
+  ======================================================= */
 
   const previousPage =
-    () => {
+    useCallback(() => {
 
-      if (!bookRef.current)
-        return;
+      const book =
+        flipBookRef.current?.pageFlip?.();
+
+      if (!book) return;
+
+      try {
+
+        book.flipPrev();
+
+      } catch (_) {}
+
+    }, []);
 
 
-      bookRef.current
-        .pageFlip()
-        .flipPrev();
+  /* =======================================================
+     NEXT PAGE
+  ======================================================= */
 
-    };
+  const nextPage =
+    useCallback(() => {
+
+      const book =
+        flipBookRef.current?.pageFlip?.();
+
+      if (!book) return;
+
+      try {
+
+        book.flipNext();
+
+      } catch (_) {}
+
+    }, []);
 
 
-  // ===================================================
-  // ZOOM
-  // ===================================================
+  /* =======================================================
+     ZOOM IN
+  ======================================================= */
 
   const zoomIn =
-    () => {
+    useCallback(() => {
 
       setZoom(
-        value =>
+        (value) =>
           Math.min(
-            value + 0.1,
-            2
+            2,
+            Number(
+              (
+                value + 0.1
+              ).toFixed(1)
+            )
           )
       );
 
-    };
+    }, []);
 
+
+  /* =======================================================
+     ZOOM OUT
+  ======================================================= */
 
   const zoomOut =
-    () => {
+    useCallback(() => {
 
       setZoom(
-        value =>
+        (value) =>
           Math.max(
-            value - 0.1,
-            0.7
+            0.7,
+            Number(
+              (
+                value - 0.1
+              ).toFixed(1)
+            )
           )
       );
 
-    };
+    }, []);
 
 
-  const resetZoom =
-    () => {
-
-      setZoom(1);
-
-    };
-
-
-  // ===================================================
-  // FULLSCREEN
-  // ===================================================
+  /* =======================================================
+     FULLSCREEN
+  ======================================================= */
 
   const toggleFullscreen =
-    async () => {
+    useCallback(async () => {
 
       try {
 
@@ -1543,12 +1118,15 @@ export default function LoginPdf2() {
           !document.fullscreenElement
         ) {
 
-          await viewerRef.current
-            ?.requestFullscreen();
+          await containerRef.current?.requestFullscreen();
+
+          setIsFullscreen(true);
 
         } else {
 
           await document.exitFullscreen();
+
+          setIsFullscreen(false);
 
         }
 
@@ -1561,19 +1139,19 @@ export default function LoginPdf2() {
 
       }
 
-    };
+    }, []);
 
 
-  // ===================================================
-  // FULLSCREEN EVENT
-  // ===================================================
+  /* =======================================================
+     FULLSCREEN EVENT
+  ======================================================= */
 
   useEffect(() => {
 
     const handleFullscreen =
       () => {
 
-        setFullscreen(
+        setIsFullscreen(
           Boolean(
             document.fullscreenElement
           )
@@ -1600,89 +1178,82 @@ export default function LoginPdf2() {
   }, []);
 
 
-  // ===================================================
-  // DOWNLOAD
-  // ===================================================
+  /* =======================================================
+     DOWNLOAD ORIGINAL PDF
+  ======================================================= */
 
-  const downloadPDF =
-    async () => {
+  const handleDownload =
+    useCallback(async () => {
 
       try {
 
-        if (!selectedPDF)
-          return;
+        if (!selectedPDF) return;
 
 
-        // ---------------------------------------------
-        // USE CACHED PDF
-        // ---------------------------------------------
-
-        const blob =
+        let blob =
           pdfBlobCacheRef.current.get(
             selectedPDF
           );
 
 
-        if (blob) {
+        if (!blob) {
 
-          const url =
-            URL.createObjectURL(
-              blob
+          const result =
+            await downloadPDF(
+              selectedPDF
             );
 
-
-          const link =
-            document.createElement(
-              "a"
-            );
-
-
-          link.href =
-            url;
-
-
-          link.download =
-            `${selectedHeading || "Digital-Album"}.pdf`;
-
-
-          document.body.appendChild(
-            link
-          );
-
-
-          link.click();
-
-
-          link.remove();
-
-
-          setTimeout(
-            () =>
-              URL.revokeObjectURL(
-                url
-              ),
-            1000
-          );
-
-
-          return;
+          blob =
+            result.blob;
 
         }
 
 
-        // ---------------------------------------------
-        // FALLBACK
-        // ---------------------------------------------
+        if (!blob) {
 
-        const proxyUrl =
-          `${PDF_PROXY}?url=${encodeURIComponent(
-            selectedPDF
-          )}`;
+          throw new Error(
+            "PDF file is not available."
+          );
+
+        }
 
 
-        window.open(
-          proxyUrl,
-          "_blank"
+        const url =
+          URL.createObjectURL(
+            blob
+          );
+
+
+        const link =
+          document.createElement(
+            "a"
+          );
+
+        link.href = url;
+
+        link.download =
+          `${
+            selectedHeading ||
+            "Digital Album"
+          }.pdf`;
+
+
+        document.body.appendChild(
+          link
+        );
+
+        link.click();
+
+        link.remove();
+
+
+        setTimeout(
+          () => {
+            URL.revokeObjectURL(
+              url
+            );
+          },
+          1000
         );
 
       } catch (err) {
@@ -1692,28 +1263,47 @@ export default function LoginPdf2() {
           err
         );
 
+        setError(
+          err?.message ||
+            "Unable to download PDF."
+        );
+
       }
 
-    };
+    }, [
+      selectedPDF,
+      selectedHeading,
+      downloadPDF,
+    ]);
 
 
-  // ===================================================
-  // KEYBOARD
-  // ===================================================
+  /* =======================================================
+     RETRY
+  ======================================================= */
+
+  const retry =
+    useCallback(() => {
+
+      setError("");
+
+      setRetryKey(
+        (value) =>
+          value + 1
+      );
+
+    }, []);
+
+
+  /* =======================================================
+     KEYBOARD CONTROLS
+  ======================================================= */
 
   useEffect(() => {
 
-    const handleKeyboard =
-      event => {
+    const handleKeyDown =
+      (event) => {
 
-        if (
-          event.key ===
-          "ArrowRight"
-        ) {
-
-          nextPage();
-
-        }
+        if (!selectedPDF) return;
 
 
         if (
@@ -1721,14 +1311,32 @@ export default function LoginPdf2() {
           "ArrowLeft"
         ) {
 
+          event.preventDefault();
+
           previousPage();
 
         }
 
 
         if (
-          event.key === "+"
+          event.key ===
+          "ArrowRight"
         ) {
+
+          event.preventDefault();
+
+          nextPage();
+
+        }
+
+
+        if (
+          event.key === "+"
+          ||
+          event.key === "="
+        ) {
+
+          event.preventDefault();
 
           zoomIn();
 
@@ -1739,7 +1347,25 @@ export default function LoginPdf2() {
           event.key === "-"
         ) {
 
+          event.preventDefault();
+
           zoomOut();
+
+        }
+
+
+        if (
+          event.key ===
+          "Escape"
+        ) {
+
+          if (
+            document.fullscreenElement
+          ) {
+
+            document.exitFullscreen();
+
+          }
 
         }
 
@@ -1748,7 +1374,7 @@ export default function LoginPdf2() {
 
     window.addEventListener(
       "keydown",
-      handleKeyboard
+      handleKeyDown
     );
 
 
@@ -1756,95 +1382,330 @@ export default function LoginPdf2() {
 
       window.removeEventListener(
         "keydown",
-        handleKeyboard
+        handleKeyDown
       );
 
     };
 
-  });
-
-
-  // ===================================================
-  // UNMOUNT
-  // ===================================================
-
-  useEffect(() => {
-
-    return () => {
-
-      abortCurrentRequest();
-
-      cleanupPdf();
-
-    };
-
   }, [
-    abortCurrentRequest,
-    cleanupPdf,
+    selectedPDF,
+    previousPage,
+    nextPage,
+    zoomIn,
+    zoomOut,
   ]);
 
 
-  // ===================================================
-  // PAGE DIMENSIONS
-  // ===================================================
+  /* =======================================================
+     BOOK DIMENSIONS
+  ======================================================= */
 
-  const bookWidth =
-    fullscreen
-      ? Math.min(
-          window.innerWidth * 0.45,
-          850
-        )
-      : Math.min(
-          window.innerWidth * 0.43,
-          700
+  const getBookSize =
+    () => {
+
+      const width =
+        window.innerWidth;
+
+      if (width <= 600) {
+
+        return {
+          width: 320,
+          height: 450,
+        };
+
+      }
+
+      if (width <= 900) {
+
+        return {
+          width: 400,
+          height: 560,
+        };
+
+      }
+
+      return {
+        width: 500,
+        height: 700,
+      };
+
+    };
+
+
+  const [
+    bookSize,
+    setBookSize,
+  ] = useState(
+    getBookSize()
+  );
+
+
+  useEffect(() => {
+
+    const resize =
+      () => {
+
+        setBookSize(
+          getBookSize()
         );
 
-
-  const bookHeight =
-    fullscreen
-      ? Math.min(
-          window.innerHeight * 0.82,
-          1000
-        )
-      : Math.min(
-          window.innerHeight * 0.76,
-          850
-        );
+      };
 
 
-  // ===================================================
-  // NO ALBUM
-  // ===================================================
+    window.addEventListener(
+      "resize",
+      resize
+    );
 
-  if (
-    !loading &&
-    albums.length === 0
-  ) {
+
+    return () => {
+
+      window.removeEventListener(
+        "resize",
+        resize
+      );
+
+    };
+
+  }, []);
+
+
+  /* =======================================================
+     ALBUM LIST
+  ======================================================= */
+
+  if (!selectedPDF) {
 
     return (
 
       <Box
-        className="pdf-viewer"
+        sx={{
+          minHeight:
+            "100vh",
+
+          background:
+            "linear-gradient(135deg,#050505,#111,#050505)",
+
+          color:
+            "#fff",
+
+          padding:
+            {
+              xs: "25px 15px",
+              md: "40px",
+            },
+        }}
       >
 
+        <Typography
+          variant="h4"
+          sx={{
+            textAlign:
+              "center",
+
+            fontWeight:
+              700,
+
+            mb: 4,
+
+            letterSpacing:
+              "1px",
+          }}
+        >
+          Golden Dreams
+          <br />
+          Digital Albums
+        </Typography>
+
+
+        {loading && (
+
+          <Box
+            sx={{
+              display:
+                "flex",
+
+              justifyContent:
+                "center",
+
+              alignItems:
+                "center",
+
+              gap: 2,
+            }}
+          >
+
+            <CircularProgress
+              size={25}
+            />
+
+            <Typography>
+              {loadingText}
+            </Typography>
+
+          </Box>
+
+        )}
+
+
+        {error && (
+
+          <Box
+            sx={{
+              maxWidth:
+                600,
+
+              mx:
+                "auto",
+
+              mb:
+                3,
+            }}
+          >
+
+            <Alert
+              severity="error"
+              action={
+
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={retry}
+                >
+                  Retry
+                </Button>
+
+              }
+            >
+              {error}
+            </Alert>
+
+          </Box>
+
+        )}
+
+
         <Box
-          className="no-album"
+          sx={{
+            display:
+              "grid",
+
+            gridTemplateColumns:
+              {
+                xs:
+                  "1fr",
+
+                sm:
+                  "repeat(2,1fr)",
+
+                md:
+                  "repeat(3,1fr)",
+              },
+
+            gap:
+              2,
+
+            maxWidth:
+              1100,
+
+            mx:
+              "auto",
+          }}
         >
 
-          <MenuBook />
+          {albums.map(
+            (
+              album,
+              index
+            ) => (
 
-          <Typography>
-            Digital Album
-          </Typography>
+              <Box
+                key={
+                  `${album.pdf}-${index}`
+                }
 
-          <Typography
-            variant="body2"
-          >
-            {error ||
-              "No digital albums are available."}
-          </Typography>
+                onClick={() =>
+                  selectAlbum(
+                    album
+                  )
+                }
+
+                sx={{
+                  cursor:
+                    "pointer",
+
+                  padding:
+                    "25px",
+
+                  borderRadius:
+                    "15px",
+
+                  background:
+                    "linear-gradient(145deg,#151515,#080808)",
+
+                  border:
+                    "1px solid rgba(255,255,255,.12)",
+
+                  transition:
+                    "all .25s ease",
+
+                  "&:hover":
+                    {
+                      transform:
+                        "translateY(-5px)",
+
+                      borderColor:
+                        "rgba(255,193,7,.6)",
+
+                      boxShadow:
+                        "0 10px 30px rgba(0,0,0,.5)",
+                    },
+                }}
+              >
+
+                <Typography
+                  sx={{
+                    fontWeight:
+                      600,
+
+                    fontSize:
+                      "18px",
+
+                    textAlign:
+                      "center",
+                  }}
+                >
+                  {album.heading}
+                </Typography>
+
+              </Box>
+
+            )
+          )}
 
         </Box>
+
+
+        {!loading &&
+          albums.length === 0 &&
+          !error && (
+
+            <Typography
+              sx={{
+                textAlign:
+                  "center",
+
+                opacity:
+                  0.7,
+
+                mt:
+                  5,
+              }}
+            >
+              No digital albums found.
+            </Typography>
+
+          )}
 
       </Box>
 
@@ -1853,112 +1714,217 @@ export default function LoginPdf2() {
   }
 
 
-  // ===================================================
-  // MAIN UI
-  // ===================================================
+  /* =======================================================
+     PDF VIEWER
+  ======================================================= */
 
   return (
 
     <Box
-      ref={viewerRef}
-      className="pdf-viewer"
+      ref={containerRef}
+
+      sx={{
+        position:
+          "relative",
+
+        width:
+          "100%",
+
+        minHeight:
+          "100vh",
+
+        background:
+          "radial-gradient(circle at center,#181818 0%,#050505 75%)",
+
+        color:
+          "#fff",
+
+        overflow:
+          "hidden",
+
+        display:
+          "flex",
+
+        flexDirection:
+          "column",
+      }}
     >
+
 
       {/* =================================================
           TOP BAR
       ================================================= */}
 
       <Box
-        className="pdf-topbar"
+        sx={{
+          minHeight:
+            "60px",
+
+          display:
+            "flex",
+
+          alignItems:
+            "center",
+
+          justifyContent:
+            "space-between",
+
+          gap:
+            1,
+
+          padding:
+            "8px 15px",
+
+          borderBottom:
+            "1px solid rgba(255,255,255,.08)",
+
+          background:
+            "rgba(0,0,0,.7)",
+
+          backdropFilter:
+            "blur(10px)",
+
+          zIndex:
+            20,
+        }}
       >
 
-        {/* LEFT */}
+        <Box
+          sx={{
+            display:
+              "flex",
 
-        <Stack
-          direction="row"
-          alignItems="center"
-          spacing={1.2}
+            alignItems:
+              "center",
+
+            gap:
+              1,
+
+            minWidth:
+              0,
+          }}
         >
 
-          <Box
-            className="book-icon"
+          <Tooltip title="Albums">
+
+            <IconButton
+              onClick={() => {
+
+                setSelectedPDF("");
+
+                setPages([]);
+
+                setPdf(null);
+
+                setError("");
+
+              }}
+
+              sx={{
+                color:
+                  "#fff",
+              }}
+            >
+
+              <ArrowBack />
+
+            </IconButton>
+
+          </Tooltip>
+
+
+          <Typography
+            sx={{
+              fontWeight:
+                600,
+
+              fontSize:
+                {
+                  xs:
+                    "14px",
+
+                  md:
+                    "18px",
+                },
+
+              whiteSpace:
+                "nowrap",
+
+              overflow:
+                "hidden",
+
+              textOverflow:
+                "ellipsis",
+            }}
           >
+            {selectedHeading}
+          </Typography>
 
-            <MenuBook />
-
-          </Box>
-
-
-          <Box>
-
-            <Typography
-              className="album-title"
-            >
-
-              {selectedHeading}
-
-            </Typography>
+        </Box>
 
 
-            <Typography
-              className="album-subtitle"
-            >
+        <Box
+          sx={{
+            display:
+              "flex",
 
-              {albums.length}
-              {" "}
-              {albums.length === 1
-                ? "Digital Album"
-                : "Digital Albums"}
+            alignItems:
+              "center",
 
-            </Typography>
-
-          </Box>
-
-        </Stack>
-
-
-        {/* CENTER */}
-
-        {!loading &&
-          pages.length > 0 && (
-
-            <Box
-              className="top-page-counter"
-            >
-
-              {currentPage + 1}
-
-              <span>
-                /
-              </span>
-
-              {totalPages}
-
-            </Box>
-
-          )}
-
-
-        {/* RIGHT */}
-
-        <Stack
-          direction="row"
-          spacing={0.5}
+            gap:
+              0.5,
+          }}
         >
 
-          <Tooltip
-            title="Download PDF"
-          >
+          <Tooltip title="Zoom Out">
 
             <IconButton
               onClick={
-                downloadPDF
+                zoomOut
               }
-              className="top-button"
+
+              sx={{
+                color:
+                  "#fff",
+              }}
             >
+              <ZoomOut />
+            </IconButton>
 
-              <Download />
+          </Tooltip>
 
+
+          <Typography
+            sx={{
+              minWidth:
+                "50px",
+
+              textAlign:
+                "center",
+
+              fontSize:
+                "14px",
+            }}
+          >
+            {Math.round(
+              zoom * 100
+            )}%
+          </Typography>
+
+
+          <Tooltip title="Zoom In">
+
+            <IconButton
+              onClick={
+                zoomIn
+              }
+
+              sx={{
+                color:
+                  "#fff",
+              }}
+            >
+              <ZoomIn />
             </IconButton>
 
           </Tooltip>
@@ -1966,7 +1932,7 @@ export default function LoginPdf2() {
 
           <Tooltip
             title={
-              fullscreen
+              isFullscreen
                 ? "Exit Fullscreen"
                 : "Fullscreen"
             }
@@ -1976,10 +1942,14 @@ export default function LoginPdf2() {
               onClick={
                 toggleFullscreen
               }
-              className="top-button"
+
+              sx={{
+                color:
+                  "#fff",
+              }}
             >
 
-              {fullscreen ? (
+              {isFullscreen ? (
                 <FullscreenExit />
               ) : (
                 <Fullscreen />
@@ -1989,54 +1959,86 @@ export default function LoginPdf2() {
 
           </Tooltip>
 
-        </Stack>
+
+          <Tooltip title="Download PDF">
+
+            <IconButton
+              onClick={
+                handleDownload
+              }
+
+              sx={{
+                color:
+                  "#fff",
+              }}
+            >
+
+              <Download />
+
+            </IconButton>
+
+          </Tooltip>
+
+        </Box>
 
       </Box>
 
 
       {/* =================================================
-          ALBUM TABS
+          ERROR
       ================================================= */}
 
-      {albums.length > 1 && (
+      {error && (
 
         <Box
-          className="album-tabs"
+          sx={{
+            position:
+              "absolute",
+
+            top:
+              75,
+
+            left:
+              "50%",
+
+            transform:
+              "translateX(-50%)",
+
+            width:
+              "min(90%,600px)",
+
+            zIndex:
+              50,
+          }}
         >
 
-          {albums.map(
-            (item, index) => (
+          <Alert
+            severity="error"
+            action={
 
-              <button
-                key={`${item.pdf}-${index}`}
-                type="button"
-                onClick={() =>
-                  changeAlbum(index)
-                }
-                className={
-                  index === currentAlbum
-                    ? "album-tab active"
-                    : "album-tab"
-                }
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => {
+
+                  setError("");
+
+                  setSelectedPDF(
+                    (value) =>
+                      value
+                  );
+
+                }}
               >
+                Retry
+              </Button>
 
-                <span
-                  className="album-number"
-                >
-                  {index + 1}
-                </span>
+            }
+          >
 
+            {error}
 
-                <span
-                  className="album-heading"
-                >
-                  {item.heading}
-                </span>
-
-              </button>
-
-            )
-          )}
+          </Alert>
 
         </Box>
 
@@ -2044,271 +2046,281 @@ export default function LoginPdf2() {
 
 
       {/* =================================================
-          BOOK STAGE
+          VIEWER
       ================================================= */}
 
       <Box
-        className="pdf-stage"
+        sx={{
+          flex:
+            1,
+
+          position:
+            "relative",
+
+          display:
+            "flex",
+
+          alignItems:
+            "center",
+
+          justifyContent:
+            "center",
+
+          padding:
+            {
+              xs:
+                "15px 5px 80px",
+
+              md:
+                "20px 20px 80px",
+            },
+
+          overflow:
+            "auto",
+        }}
       >
 
-        {/* =================================================
+
+        {/* ===============================================
             LOADING
-        ================================================= */}
+        =============================================== */}
 
         {loading && (
 
           <Box
-            className="pdf-loading"
+            sx={{
+              position:
+                "absolute",
+
+              inset:
+                0,
+
+              display:
+                "flex",
+
+              flexDirection:
+                "column",
+
+              alignItems:
+                "center",
+
+              justifyContent:
+                "center",
+
+              zIndex:
+                10,
+
+              background:
+                "rgba(0,0,0,.5)",
+
+              backdropFilter:
+                "blur(5px)",
+            }}
           >
 
-            <Box
-              className="book-loader"
-            >
-
-              <Box
-                className="book-glow"
-              />
-
-              <Box
-                className="book-ground-shadow"
-              />
-
-
-              <Box
-                className="book-left"
-              >
-
-                <Box
-                  className="page-stack left-stack-1"
-                />
-
-                <Box
-                  className="page-stack left-stack-2"
-                />
-
-                <Box
-                  className="book-page left-page"
-                >
-
-                  <Box className="page-line line-1" />
-                  <Box className="page-line line-2" />
-                  <Box className="page-line line-3" />
-                  <Box className="page-line line-4" />
-
-                </Box>
-
-              </Box>
-
-
-              <Box
-                className="book-right"
-              >
-
-                <Box
-                  className="page-stack right-stack-1"
-                />
-
-                <Box
-                  className="page-stack right-stack-2"
-                />
-
-                <Box
-                  className="book-page right-page"
-                >
-
-                  <Box className="page-line line-1" />
-                  <Box className="page-line line-2" />
-                  <Box className="page-line line-3" />
-                  <Box className="page-line line-4" />
-
-                </Box>
-
-              </Box>
-
-
-              <Box
-                className="book-spine"
-              >
-
-                <Box
-                  className="spine-light"
-                />
-
-              </Box>
-
-
-              <Box
-                className="turning-page"
-              >
-
-                <Box
-                  className="turning-page-front"
-                >
-
-                  <Box className="page-line line-1" />
-                  <Box className="page-line line-2" />
-                  <Box className="page-line line-3" />
-                  <Box className="page-line line-4" />
-
-                </Box>
-
-                <Box
-                  className="turning-page-back"
-                />
-
-              </Box>
-
-            </Box>
-
-
-            <Box
-              className="loading-dots"
-            >
-
-              <span className="loader-dot blue-dot" />
-              <span className="loader-dot cyan-dot" />
-              <span className="loader-dot purple-dot" />
-
-            </Box>
-
+            <CircularProgress
+              size={45}
+            />
 
             <Typography
-              className="loading-text"
+              sx={{
+                mt:
+                  2,
+
+                fontSize:
+                  "14px",
+
+                opacity:
+                  0.85,
+              }}
             >
-
               {loadingText}
-
             </Typography>
-
-
-            {pages.length > 0 && (
-
-              <Typography
-                className="loading-small"
-              >
-
-                {pages.length} pages ready
-
-              </Typography>
-
-            )}
 
           </Box>
 
         )}
 
 
-        {/* =================================================
-            ERROR
-        ================================================= */}
-
-        {!loading &&
-          error &&
-          pages.length === 0 && (
-
-            <Box
-              className="pdf-error"
-            >
-
-              <MenuBook />
-
-              <Typography>
-                {error}
-              </Typography>
-
-              <button
-                onClick={() =>
-                  loadPDF(
-                    selectedPDF,
-                    selectedHeading
-                  )
-                }
-              >
-                Try Again
-              </button>
-
-            </Box>
-
-          )}
-
-
-        {/* =================================================
+        {/* ===============================================
             BOOK
-        ================================================= */}
+        =============================================== */}
 
         {!loading &&
           pages.length > 0 && (
 
             <Box
-              className="book-wrapper"
               sx={{
                 transform:
                   `scale(${zoom})`,
+
+                transformOrigin:
+                  "center center",
+
+                transition:
+                  "transform .2s ease",
+
+                display:
+                  "flex",
+
+                justifyContent:
+                  "center",
+
+                alignItems:
+                  "center",
               }}
             >
 
               <HTMLFlipBook
 
-                ref={bookRef}
+                ref={
+                  flipBookRef
+                }
 
-                width={bookWidth}
+                width={
+                  bookSize.width
+                }
 
-                height={bookHeight}
+                height={
+                  bookSize.height
+                }
 
                 size="fixed"
 
-                minWidth={280}
-
-                maxWidth={850}
-
-                minHeight={400}
-
-                maxHeight={1000}
-
-                showCover={true}
-
-                drawShadow={true}
-
-                maxShadowOpacity={0.75}
-
-                flippingTime={1100}
-
-                usePortrait={
-                  window.innerWidth < 768
+                minWidth={
+                  280
                 }
 
-                autoSize={false}
+                maxWidth={
+                  900
+                }
 
-                mobileScrollSupport={true}
+                minHeight={
+                  380
+                }
 
-                swipeDistance={25}
+                maxHeight={
+                  1200
+                }
 
-                clickEventForward={true}
+                drawShadow={
+                  true
+                }
 
-                useMouseEvents={true}
+                flippingTime={
+                  650
+                }
 
-                startZIndex={0}
+                usePortrait={
+                  true
+                }
 
-                startPage={0}
+                startPage={
+                  0
+                }
+
+                autoSize={
+                  true
+                }
+
+                maxShadowOpacity={
+                  0.5
+                }
+
+                showCover={
+                  false
+                }
+
+                mobileScrollSupport={
+                  true
+                }
+
+                clickEventForward={
+                  true
+                }
+
+                useMouseEvents={
+                  true
+                }
+
+                swipeDistance={
+                  30
+                }
 
                 onFlip={
                   handleFlip
                 }
-
-                className="pdf-book"
-
               >
 
                 {pages.map(
-                  (image, index) => (
+                  (
+                    image,
+                    index
+                  ) => (
 
-                    <FlipPage
-                      key={index}
-                      src={image}
-                      pageNumber={
-                        index + 1
+                    <div
+                      key={
+                        `page-${index}`
                       }
-                    />
+
+                      style={{
+                        width:
+                          "100%",
+
+                        height:
+                          "100%",
+
+                        background:
+                          "#fff",
+
+                        overflow:
+                          "hidden",
+
+                        display:
+                          "flex",
+
+                        alignItems:
+                          "center",
+
+                        justifyContent:
+                          "center",
+                      }}
+                    >
+
+                      <img
+                        src={
+                          image
+                        }
+
+                        alt={
+                          `Page ${
+                            index + 1
+                          }`
+                        }
+
+                        draggable={
+                          false
+                        }
+
+                        style={{
+                          width:
+                            "100%",
+
+                          height:
+                            "100%",
+
+                          objectFit:
+                            "contain",
+
+                          display:
+                            "block",
+
+                          userSelect:
+                            "none",
+                        }}
+                      />
+
+                    </div>
 
                   )
                 )}
@@ -2319,196 +2331,155 @@ export default function LoginPdf2() {
 
           )}
 
+
+        {/* ===============================================
+            EMPTY STATE
+        =============================================== */}
+
+        {!loading &&
+          !error &&
+          pages.length === 0 && (
+
+            <Typography
+              sx={{
+                opacity:
+                  0.7,
+              }}
+            >
+              Preparing album...
+            </Typography>
+
+          )}
+
       </Box>
 
 
       {/* =================================================
-          BOTTOM TOOLBAR
+          BOTTOM CONTROLS
       ================================================= */}
 
       {!loading &&
         pages.length > 0 && (
 
           <Box
-            className="pdf-toolbar"
+            sx={{
+              position:
+                "absolute",
+
+              bottom:
+                "15px",
+
+              left:
+                "50%",
+
+              transform:
+                "translateX(-50%)",
+
+              display:
+                "flex",
+
+              alignItems:
+                "center",
+
+              gap:
+                1,
+
+              padding:
+                "6px 12px",
+
+              borderRadius:
+                "30px",
+
+              background:
+                "rgba(0,0,0,.75)",
+
+              border:
+                "1px solid rgba(255,255,255,.12)",
+
+              backdropFilter:
+                "blur(10px)",
+
+              zIndex:
+                30,
+            }}
           >
 
-            <Stack
-              direction="row"
-              alignItems="center"
-              justifyContent="center"
-              spacing={0.5}
+            <Tooltip title="Previous Page">
+
+              <span>
+
+                <IconButton
+                  onClick={
+                    previousPage
+                  }
+
+                  disabled={
+                    currentPage <= 0
+                  }
+
+                  sx={{
+                    color:
+                      "#fff",
+                  }}
+                >
+
+                  <ChevronLeft />
+
+                </IconButton>
+
+              </span>
+
+            </Tooltip>
+
+
+            <Typography
+              sx={{
+                minWidth:
+                  "90px",
+
+                textAlign:
+                  "center",
+
+                fontSize:
+                  "13px",
+              }}
             >
 
-              {/* PREVIOUS */}
+              Page{" "}
+              {currentPage + 1}{" "}
+              /{" "}
+              {totalPages}
 
-              <Tooltip
-                title="Previous page"
-              >
-
-                <span>
-
-                  <IconButton
-                    onClick={
-                      previousPage
-                    }
-                    disabled={
-                      currentPage <= 0
-                    }
-                    className="nav-button"
-                  >
-
-                    <ArrowBackIosNew
-                      fontSize="small"
-                    />
-
-                  </IconButton>
-
-                </span>
-
-              </Tooltip>
+            </Typography>
 
 
-              {/* ZOOM OUT */}
+            <Tooltip title="Next Page">
 
-              <Tooltip
-                title="Zoom out"
-              >
+              <span>
 
                 <IconButton
                   onClick={
-                    zoomOut
+                    nextPage
                   }
-                  className="control-button"
+
+                  disabled={
+                    currentPage >=
+                    totalPages - 1
+                  }
+
+                  sx={{
+                    color:
+                      "#fff",
+                  }}
                 >
 
-                  <ZoomOut />
+                  <ChevronRight />
 
                 </IconButton>
 
-              </Tooltip>
+              </span>
 
-
-              {/* ZOOM SLIDER */}
-
-              <Box
-                sx={{
-                  width: {
-                    xs: 60,
-                    sm: 110,
-                    md: 150,
-                  },
-                }}
-              >
-
-                <Slider
-                  value={zoom}
-                  min={0.7}
-                  max={2}
-                  step={0.1}
-                  onChange={(
-                    _,
-                    value
-                  ) =>
-                    setZoom(value)
-                  }
-                  className="zoom-slider"
-                />
-
-              </Box>
-
-
-              {/* ZOOM VALUE */}
-
-              <Typography
-                className="zoom-value"
-              >
-
-                {Math.round(
-                  zoom * 100
-                )}
-                %
-
-              </Typography>
-
-
-              {/* ZOOM IN */}
-
-              <Tooltip
-                title="Zoom in"
-              >
-
-                <IconButton
-                  onClick={
-                    zoomIn
-                  }
-                  className="control-button"
-                >
-
-                  <ZoomIn />
-
-                </IconButton>
-
-              </Tooltip>
-
-
-              {/* RESET */}
-
-              <Tooltip
-                title="Reset zoom"
-              >
-
-                <IconButton
-                  onClick={
-                    resetZoom
-                  }
-                  className="reset-button"
-                >
-
-                  <RestartAlt />
-
-                </IconButton>
-
-              </Tooltip>
-
-
-              <Divider
-                orientation="vertical"
-                flexItem
-                className="toolbar-divider"
-              />
-
-
-              {/* NEXT */}
-
-              <Tooltip
-                title="Next page"
-              >
-
-                <span>
-
-                  <IconButton
-                    onClick={
-                      nextPage
-                    }
-                    disabled={
-                      currentPage >=
-                      totalPages - 1
-                    }
-                    className="next-button"
-                  >
-
-                    <ArrowForwardIos
-                      fontSize="small"
-                    />
-
-                  </IconButton>
-
-                </span>
-
-              </Tooltip>
-
-            </Stack>
+            </Tooltip>
 
           </Box>
 
@@ -2518,4 +2489,7 @@ export default function LoginPdf2() {
 
   );
 
-}
+};
+
+
+export default LoginPdf2;
