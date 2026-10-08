@@ -1,37 +1,74 @@
+/* =========================================================
+   GLOBAL
+========================================================= */
+
 * {
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+}
 
-/* =====================================================
+body {
+  background: #05070b;
+}
+
+
+/* =========================================================
    MAIN VIEWER
-===================================================== */
+========================================================= */
 
 .pdf-viewer {
+  position: relative;
+
   width: 100%;
   height: 100vh;
   min-height: 100vh;
 
   overflow: hidden;
 
-  background: #05070b;
-
-  color: white;
-
   display: flex;
   flex-direction: column;
+
+  color: #ffffff;
+
+  /*
+     IMPORTANT:
+     No white background.
+  */
+
+  background:
+    radial-gradient(
+      circle at 50% 45%,
+      rgba(0, 140, 255, 0.035),
+      transparent 40%
+    ),
+    #05070b;
+
+  font-family:
+    Inter,
+    Roboto,
+    Arial,
+    sans-serif;
 }
 
 
-/* =====================================================
+/* =========================================================
    TOP BAR
-===================================================== */
+========================================================= */
 
 .pdf-topbar {
-  height: 64px;
-  min-height: 64px;
+  position: relative;
 
   width: 100%;
+  height: 64px;
+  min-height: 64px;
 
   display: flex;
   align-items: center;
@@ -40,27 +77,34 @@
   padding: 0 18px;
 
   background:
-    rgba(4, 8, 15, 0.96);
+    rgba(3, 7, 13, 0.97);
 
   border-bottom:
     1px solid
-    rgba(255, 255, 255, 0.08);
+    rgba(255, 255, 255, 0.07);
 
-  position: relative;
+  box-shadow:
+    0 4px 20px
+    rgba(0, 0, 0, 0.28);
 
   z-index: 100;
 }
 
 
+/* =========================================================
+   BOOK ICON
+========================================================= */
+
 .book-icon {
   width: 38px;
   height: 38px;
-
-  border-radius: 10px;
+  min-width: 38px;
 
   display: flex;
   align-items: center;
   justify-content: center;
+
+  border-radius: 10px;
 
   background:
     linear-gradient(
@@ -71,14 +115,17 @@
 
   box-shadow:
     0 5px 20px
-    rgba(0, 150, 255, 0.3);
+    rgba(0, 150, 255, 0.28);
 }
-
 
 .book-icon svg {
   font-size: 21px;
 }
 
+
+/* =========================================================
+   TITLE
+========================================================= */
 
 .album-title {
   font-size: 15px !important;
@@ -89,82 +136,80 @@
   max-width: 45vw;
 
   overflow: hidden;
-
-  text-overflow: ellipsis;
-
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-
 .album-subtitle {
+  margin-top: 2px;
+
   font-size: 10px !important;
 
   color:
-    rgba(255, 255, 255, 0.45);
-
-  margin-top: 2px;
+    rgba(255, 255, 255, 0.42);
 }
 
 
-/* =====================================================
-   TOP PAGE COUNTER
-===================================================== */
+/* =========================================================
+   PAGE COUNTER
+========================================================= */
 
 .top-page-counter {
   position: absolute;
 
   left: 50%;
-
-  transform:
-    translateX(-50%);
-
-  font-size: 13px;
-
-  font-weight: 600;
+  transform: translateX(-50%);
 
   padding: 6px 15px;
 
   border-radius: 30px;
 
   background:
-    rgba(255, 255, 255, 0.06);
+    rgba(255, 255, 255, 0.045);
 
   border:
     1px solid
-    rgba(255, 255, 255, 0.1);
-}
+    rgba(255, 255, 255, 0.09);
 
+  font-size: 13px;
+  font-weight: 600;
+
+  box-shadow:
+    0 5px 20px
+    rgba(0, 0, 0, 0.18);
+}
 
 .top-page-counter span {
   margin: 0 6px;
 
   color:
-    rgba(255, 255, 255, 0.3);
+    rgba(255, 255, 255, 0.25);
 }
 
+
+/* =========================================================
+   TOP BUTTON
+========================================================= */
 
 .top-button {
-  color: white !important;
+  width: 40px !important;
+  height: 40px !important;
 
-  width: 40px;
-  height: 40px;
+  color: #ffffff !important;
 }
-
 
 .top-button:hover {
   background:
-    rgba(0, 198, 255, 0.12)
-    !important;
+    rgba(0, 198, 255, 0.10) !important;
 }
 
 
-/* =====================================================
+/* =========================================================
    ALBUM TABS
-===================================================== */
+========================================================= */
 
 .album-tabs {
   width: 100%;
-
   min-height: 48px;
 
   display: flex;
@@ -172,36 +217,41 @@
 
   gap: 8px;
 
-  padding:
-    6px 14px;
+  padding: 6px 14px;
 
   overflow-x: auto;
 
   background:
-    rgba(6, 10, 18, 0.98);
+    rgba(5, 9, 16, 0.98);
 
   border-bottom:
     1px solid
-    rgba(255, 255, 255, 0.08);
+    rgba(255, 255, 255, 0.07);
 
   scrollbar-width: thin;
 
   z-index: 90;
 }
 
-
 .album-tabs::-webkit-scrollbar {
   height: 3px;
 }
 
+.album-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
 
 .album-tabs::-webkit-scrollbar-thumb {
   background:
-    rgba(0, 198, 255, 0.5);
+    rgba(0, 198, 255, 0.45);
 
   border-radius: 20px;
 }
 
+
+/* =========================================================
+   ALBUM TAB
+========================================================= */
 
 .album-tab {
   flex-shrink: 0;
@@ -211,24 +261,22 @@
 
   gap: 7px;
 
+  min-height: 34px;
+  max-width: 280px;
+
+  padding: 6px 13px;
+
   border:
     1px solid
-    rgba(255, 255, 255, 0.1);
+    rgba(255, 255, 255, 0.09);
 
   border-radius: 20px;
 
-  padding:
-    6px 13px;
-
-  min-height: 34px;
-
-  max-width: 280px;
-
   background:
-    rgba(255, 255, 255, 0.04);
+    rgba(255, 255, 255, 0.035);
 
   color:
-    rgba(255, 255, 255, 0.6);
+    rgba(255, 255, 255, 0.58);
 
   cursor: pointer;
 
@@ -238,20 +286,18 @@
   font-family: inherit;
 }
 
-
 .album-tab:hover {
-  color: white;
+  color: #ffffff;
 
   background:
-    rgba(0, 198, 255, 0.1);
+    rgba(0, 198, 255, 0.08);
 
   border-color:
-    rgba(0, 198, 255, 0.4);
+    rgba(0, 198, 255, 0.35);
 }
 
-
 .album-tab.active {
-  color: white;
+  color: #ffffff;
 
   background:
     linear-gradient(
@@ -261,216 +307,204 @@
     );
 
   border-color:
-    rgba(0, 198, 255, 0.8);
+    rgba(0, 198, 255, 0.75);
 
   box-shadow:
     0 5px 18px
-    rgba(0, 150, 255, 0.25);
+    rgba(0, 150, 255, 0.23);
 }
-
 
 .album-number {
   width: 20px;
   height: 20px;
-
   min-width: 20px;
-
-  border-radius: 50%;
 
   display: flex;
   align-items: center;
   justify-content: center;
 
-  font-size: 10px;
+  border-radius: 50%;
 
+  font-size: 10px;
   font-weight: 700;
 
   background:
     rgba(255, 255, 255, 0.12);
 }
 
-
 .album-heading {
   font-size: 12px;
-
   font-weight: 600;
 
   white-space: nowrap;
-
   overflow: hidden;
-
   text-overflow: ellipsis;
 }
 
 
-/* =====================================================
-   BOOK STAGE
-===================================================== */
+/* =========================================================
+   PDF STAGE
+
+   THIS IS THE IMPORTANT PART:
+   NO WHITE BACKGROUND AROUND PDF.
+========================================================= */
 
 .pdf-stage {
+  position: relative;
+
   flex: 1;
 
   width: 100%;
-
   min-height: 0;
 
   display: flex;
-
   align-items: center;
   justify-content: center;
 
   overflow: auto;
 
-  position: relative;
+  padding: 10px;
+
+  /*
+     Dark viewer background.
+     The PDF page itself is separate.
+  */
 
   background:
     radial-gradient(
-      circle at center,
-      rgba(0, 100, 180, 0.06),
+      ellipse at center,
+      rgba(0, 120, 255, 0.025),
       transparent 55%
     ),
     #05070b;
 
-  padding: 10px;
+  scrollbar-width: thin;
+}
+
+.pdf-stage::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.pdf-stage::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pdf-stage::-webkit-scrollbar-thumb {
+  background:
+    rgba(255, 255, 255, 0.12);
+
+  border-radius: 20px;
 }
 
 
-/* =====================================================
+/* =========================================================
    BOOK WRAPPER
-===================================================== */
+
+   IMPORTANT:
+   Transparent.
+   No white box.
+========================================================= */
 
 .book-wrapper {
   display: flex;
-
   align-items: center;
   justify-content: center;
+
+  background: transparent !important;
 
   transform-origin:
     center center;
 
   transition:
-    transform
-    0.25s ease;
-
-  background:
-    transparent;
+    transform 0.25s ease;
 }
 
 
-/* =====================================================
+/* =========================================================
    FLIP BOOK
-===================================================== */
+========================================================= */
 
 .pdf-book {
+  margin: 0 auto !important;
+
   background:
     transparent !important;
-
-  margin:
-    0 auto;
 }
 
+.pdf-book,
+.pdf-book > div,
+.pdf-book .stf__parent,
+.pdf-book .stf__block,
+.pdf-book .stf__item {
+  background:
+    transparent !important;
+}
+
+
+/*
+   Remove any default white layer
+   generated by react-pageflip.
+*/
 
 .pdf-book .stf__parent {
-  background:
-    transparent !important;
+  box-shadow:
+    none !important;
 }
 
 
-/* =====================================================
+/* =========================================================
    PDF PAGE
-===================================================== */
+
+   This white is ONLY the actual PDF page.
+   Surrounding viewer remains dark.
+========================================================= */
 
 .pdf-book-page {
+  position: relative;
+
   width: 100%;
   height: 100%;
 
-  position: relative;
-
   overflow: hidden;
 
-  background: white;
-
   display: flex;
-
   align-items: center;
   justify-content: center;
 
+  /*
+     Actual PDF page.
+     Keep this white because most PDFs
+     contain a white document background.
+  */
+
+  background: #ffffff;
+
   box-shadow:
-    0 0 12px
-    rgba(0, 0, 0, 0.35);
+    0 0 18px
+    rgba(0, 0, 0, 0.42);
+
+  user-select: none;
 }
 
-
 .pdf-book-page img {
+  display: block;
+
   width: 100%;
   height: 100%;
 
   object-fit: contain;
 
-  display: block;
-
   user-select: none;
-
   pointer-events: none;
 
   -webkit-user-drag: none;
 }
 
 
-/* =====================================================
-   EMPTY PAGE
-===================================================== */
-
-.page-placeholder {
-  width: 100%;
-  height: 100%;
-
-  display: flex;
-
-  align-items: center;
-  justify-content: center;
-
-  background:
-    linear-gradient(
-      135deg,
-      #f5f5f5,
-      #e7e7e7
-    );
-}
-
-
-.small-loader {
-  width: 25px;
-  height: 25px;
-
-  border-radius: 50%;
-
-  border:
-    3px solid
-    rgba(0, 0, 0, 0.1);
-
-  border-top-color:
-    #00a8ff;
-
-  animation:
-    smallSpin
-    0.8s
-    linear
-    infinite;
-}
-
-
-@keyframes smallSpin {
-  to {
-    transform:
-      rotate(360deg);
-  }
-}
-
-
-/* =====================================================
+/* =========================================================
    PAGE NUMBER
-===================================================== */
+========================================================= */
 
 .page-number {
   position: absolute;
@@ -478,44 +512,52 @@
   right: 10px;
   bottom: 8px;
 
-  font-size: 10px;
-
-  padding:
-    3px 8px;
+  padding: 3px 8px;
 
   border-radius: 15px;
 
   background:
-    rgba(0, 0, 0, 0.5);
+    rgba(0, 0, 0, 0.50);
 
-  color: white;
+  color: #ffffff;
 
-  opacity: 0.65;
+  font-size: 10px;
+
+  opacity: 0.62;
 
   backdrop-filter:
     blur(5px);
+
+  pointer-events: none;
 }
 
 
-/* =====================================================
+/* =========================================================
    LOADING
-===================================================== */
+========================================================= */
 
 .pdf-loading {
-  display: flex;
+  position: absolute;
 
+  inset: 0;
+
+  display: flex;
   flex-direction: column;
 
   align-items: center;
   justify-content: center;
 
   gap: 15px;
-}
 
+  background:
+    transparent;
+
+  z-index: 10;
+}
 
 .loading-text {
   color:
-    rgba(255, 255, 255, 0.7) !important;
+    rgba(255, 255, 255, 0.70) !important;
 
   font-size:
     13px !important;
@@ -523,19 +565,18 @@
   text-align: center;
 }
 
-
 .loading-small {
-  font-size:
-    11px !important;
-
   color:
     rgba(255, 255, 255, 0.35) !important;
+
+  font-size:
+    11px !important;
 }
 
 
-/* =====================================================
+/* =========================================================
    LOADING BOOK
-===================================================== */
+========================================================= */
 
 .book-loader {
   position: relative;
@@ -545,7 +586,6 @@
 
   perspective: 700px;
 }
-
 
 .book-glow {
   position: absolute;
@@ -566,10 +606,8 @@
       transparent 70%
     );
 
-  filter:
-    blur(15px);
+  filter: blur(15px);
 }
-
 
 .book-ground-shadow {
   position: absolute;
@@ -588,10 +626,8 @@
   background:
     rgba(0, 0, 0, 0.65);
 
-  filter:
-    blur(7px);
+  filter: blur(7px);
 }
-
 
 .book-left,
 .book-right {
@@ -606,16 +642,13 @@
     preserve-3d;
 }
 
-
 .book-left {
   left: 10px;
 }
 
-
 .book-right {
   right: 10px;
 }
-
 
 .book-page {
   position: absolute;
@@ -637,12 +670,10 @@
     rgba(0, 0, 0, 0.3);
 }
 
-
 .right-page {
   border-radius:
     2px 5px 5px 2px;
 }
-
 
 .page-stack {
   position: absolute;
@@ -657,30 +688,25 @@
   opacity: 0.7;
 }
 
-
 .left-stack-1 {
   transform:
     translateX(-4px);
 }
-
 
 .left-stack-2 {
   transform:
     translateX(-2px);
 }
 
-
 .right-stack-1 {
   transform:
     translateX(4px);
 }
 
-
 .right-stack-2 {
   transform:
     translateX(2px);
 }
-
 
 .page-line {
   position: absolute;
@@ -696,26 +722,26 @@
     rgba(0, 0, 0, 0.12);
 }
 
-
 .line-1 {
   top: 20px;
 }
-
 
 .line-2 {
   top: 33px;
 }
 
-
 .line-3 {
   top: 46px;
 }
-
 
 .line-4 {
   top: 59px;
 }
 
+
+/* =========================================================
+   BOOK SPINE
+========================================================= */
 
 .book-spine {
   position: absolute;
@@ -742,7 +768,6 @@
   border-radius: 4px;
 }
 
-
 .spine-light {
   width: 1px;
   height: 100%;
@@ -753,6 +778,10 @@
     rgba(255, 255, 255, 0.55);
 }
 
+
+/* =========================================================
+   TURNING PAGE
+========================================================= */
 
 .turning-page {
   position: absolute;
@@ -770,14 +799,12 @@
     preserve-3d;
 
   animation:
-    pageTurn
-    1.8s
+    pageTurn 1.8s
     ease-in-out
     infinite;
 
   z-index: 20;
 }
-
 
 .turning-page-front,
 .turning-page-back {
@@ -799,15 +826,12 @@
     2px 5px 5px 2px;
 }
 
-
 .turning-page-back {
   transform:
     rotateY(180deg);
 }
 
-
 @keyframes pageTurn {
-
   0% {
     transform:
       rotateY(0deg);
@@ -827,24 +851,21 @@
     transform:
       rotateY(-180deg);
   }
-
 }
 
 
-/* =====================================================
+/* =========================================================
    LOADING DOTS
-===================================================== */
+========================================================= */
 
 .loading-dots {
   display: flex;
-
   align-items: center;
 
   gap: 7px;
 
   height: 14px;
 }
-
 
 .loader-dot {
   width: 7px;
@@ -859,7 +880,6 @@
     infinite;
 }
 
-
 .blue-dot {
   background:
     #1976d2;
@@ -867,7 +887,6 @@
   animation-delay:
     0s;
 }
-
 
 .cyan-dot {
   background:
@@ -877,7 +896,6 @@
     0.15s;
 }
 
-
 .purple-dot {
   background:
     #9c27b0;
@@ -886,103 +904,212 @@
     0.3s;
 }
 
-
 @keyframes loadingDot {
-
   0%,
   100% {
-
     transform:
       translateY(0)
       scale(0.75);
 
-    opacity:
-      0.45;
-
+    opacity: 0.45;
   }
 
   50% {
-
     transform:
       translateY(-5px)
       scale(1.1);
 
-    opacity:
-      1;
-
+    opacity: 1;
   }
-
 }
 
 
-/* =====================================================
-   BOTTOM TOOLBAR
-===================================================== */
+/* =========================================================
+   ERROR
+========================================================= */
 
-.pdf-toolbar {
-  height: 64px;
+.pdf-error {
+  display: flex;
 
-  min-height: 64px;
+  flex-direction: column;
 
-  width: 100%;
+  align-items: center;
+  justify-content: center;
 
+  gap: 12px;
+
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 54px !important;
+
+  color:
+    #00c6ff;
+}
+
+.error-title {
+  font-size: 18px !important;
+
+  font-weight: 700 !important;
+}
+
+.error-text {
+  font-size: 12px !important;
+
+  color:
+    rgba(255, 255, 255, 0.45);
+}
+
+.retry-button,
+.back-albums-button {
   display: flex;
 
   align-items: center;
   justify-content: center;
 
+  gap: 6px;
+
+  padding: 9px 16px;
+
+  border-radius: 22px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.12);
+
+  cursor: pointer;
+
+  color: #ffffff;
+
+  font-family: inherit;
+
+  font-size: 12px;
+
+  transition:
+    all 0.2s ease;
+}
+
+.retry-button {
   background:
-    rgba(4, 8, 15, 0.96);
+    linear-gradient(
+      135deg,
+      #1976d2,
+      #00a8ff
+    );
+}
+
+.back-albums-button {
+  background:
+    rgba(255, 255, 255, 0.06);
+}
+
+.retry-button:hover,
+.back-albums-button:hover {
+  transform:
+    translateY(-1px);
+
+  border-color:
+    rgba(0, 198, 255, 0.45);
+}
+
+.retry-button svg,
+.back-albums-button svg {
+  font-size: 16px;
+}
+
+
+/* =========================================================
+   BOTTOM TOOLBAR
+========================================================= */
+
+.pdf-toolbar {
+  width: 100%;
+  height: 64px;
+  min-height: 64px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background:
+    rgba(3, 7, 13, 0.97);
 
   border-top:
     1px solid
-    rgba(255, 255, 255, 0.08);
+    rgba(255, 255, 255, 0.07);
+
+  box-shadow:
+    0 -4px 20px
+    rgba(0, 0, 0, 0.25);
 
   z-index: 100;
 }
 
 
-.nav-button {
-  width: 42px;
-  height: 42px;
+/* =========================================================
+   NAV BUTTON
+========================================================= */
 
-  color: white !important;
+.nav-button {
+  width: 42px !important;
+  height: 42px !important;
+
+  color: #ffffff !important;
 
   background:
-    rgba(255, 255, 255, 0.05)
-    !important;
+    rgba(255, 255, 255, 0.05) !important;
 }
-
 
 .nav-button:hover {
   background:
-    rgba(25, 118, 210, 0.3)
-    !important;
+    rgba(25, 118, 210, 0.30) !important;
 }
 
+
+/* =========================================================
+   CONTROL BUTTON
+========================================================= */
 
 .control-button {
   color:
-    rgba(255, 255, 255, 0.75)
-    !important;
+    rgba(255, 255, 255, 0.75) !important;
 }
-
 
 .control-button:hover {
-  color: white !important;
+  color: #ffffff !important;
 
   background:
-    rgba(0, 198, 255, 0.1)
-    !important;
+    rgba(0, 198, 255, 0.10) !important;
 }
-
 
 .reset-button {
   color:
-    rgba(255, 255, 255, 0.55)
-    !important;
+    rgba(255, 255, 255, 0.55) !important;
 }
 
+
+/* =========================================================
+   ZOOM
+========================================================= */
+
+.zoom-slider-wrapper {
+  width: 150px;
+}
+
+.zoom-slider {
+  color:
+    #00c6ff !important;
+}
+
+.zoom-slider .MuiSlider-thumb {
+  width: 12px;
+  height: 12px;
+
+  box-shadow:
+    0 0 12px
+    rgba(0, 198, 255, 0.8);
+}
 
 .zoom-value {
   width: 42px;
@@ -997,37 +1124,27 @@
 }
 
 
-.zoom-slider {
-  color:
-    #00c6ff !important;
-}
-
-
-.zoom-slider .MuiSlider-thumb {
-  width: 12px;
-  height: 12px;
-
-  box-shadow:
-    0 0 12px
-    rgba(0, 198, 255, 0.8);
-}
-
+/* =========================================================
+   DIVIDER
+========================================================= */
 
 .toolbar-divider {
-  margin:
-    0 7px;
+  margin: 0 7px;
 
   border-color:
-    rgba(255, 255, 255, 0.1)
-    !important;
+    rgba(255, 255, 255, 0.10) !important;
 }
 
 
-.next-button {
-  width: 42px;
-  height: 42px;
+/* =========================================================
+   NEXT BUTTON
+========================================================= */
 
-  color: white !important;
+.next-button {
+  width: 42px !important;
+  height: 42px !important;
+
+  color: #ffffff !important;
 
   background:
     linear-gradient(
@@ -1041,7 +1158,6 @@
     rgba(0, 140, 255, 0.25);
 }
 
-
 .next-button:hover {
   background:
     linear-gradient(
@@ -1051,84 +1167,20 @@
     ) !important;
 }
 
-
 .nav-button.Mui-disabled,
 .next-button.Mui-disabled {
   opacity: 0.25;
 }
 
 
-/* =====================================================
-   ERROR
-===================================================== */
-
-.pdf-error {
-  display: flex;
-
-  flex-direction: column;
-
-  align-items: center;
-  justify-content: center;
-
-  gap: 15px;
-
-  color:
-    rgba(255, 255, 255, 0.65);
-
-  text-align: center;
-}
-
-
-.pdf-error svg {
-  font-size: 55px;
-
-  color:
-    #00c6ff;
-}
-
-
-.pdf-error button {
-  border: none;
-
-  border-radius: 22px;
-
-  padding:
-    9px 22px;
-
-  color: white;
-
-  cursor: pointer;
-
-  font-weight: 600;
-
-  background:
-    linear-gradient(
-      135deg,
-      #1976d2,
-      #00a8ff
-    );
-
-  box-shadow:
-    0 5px 20px
-    rgba(0, 150, 255, 0.25);
-}
-
-
-.pdf-error button:hover {
-  background:
-    linear-gradient(
-      135deg,
-      #2196f3,
-      #00c6ff
-    );
-}
-
-
-/* =====================================================
+/* =========================================================
    NO ALBUM
-===================================================== */
+========================================================= */
 
 .no-album {
+  width: 100%;
+  height: 100vh;
+
   display: flex;
 
   flex-direction: column;
@@ -1139,9 +1191,11 @@
   gap: 12px;
 
   color:
-    rgba(255, 255, 255, 0.65);
-}
+    rgba(255, 255, 255, 0.60);
 
+  background:
+    #05070b;
+}
 
 .no-album svg {
   font-size: 60px;
@@ -1151,83 +1205,75 @@
 }
 
 
-/* =====================================================
+/* =========================================================
    FULLSCREEN
-===================================================== */
+========================================================= */
 
 .pdf-viewer:fullscreen {
   width: 100vw;
-
   height: 100vh;
 
   background:
     #05070b;
 }
 
-
-.pdf-viewer:fullscreen
-.pdf-stage {
+.pdf-viewer:fullscreen .pdf-stage {
   padding: 5px;
 }
 
-
-.pdf-viewer:fullscreen
-.pdf-book-page {
+.pdf-viewer:fullscreen .pdf-book-page {
   box-shadow:
-    0 0 25px
-    rgba(0, 0, 0, 0.55);
+    0 0 28px
+    rgba(0, 0, 0, 0.60);
 }
 
 
-/* =====================================================
+/* =========================================================
    TABLET
-===================================================== */
+========================================================= */
 
 @media (max-width: 900px) {
-
   .pdf-stage {
     padding: 5px;
   }
 
+  .zoom-slider-wrapper {
+    width: 110px;
+  }
 }
 
 
-/* =====================================================
+/* =========================================================
    MOBILE
-===================================================== */
+========================================================= */
 
 @media (max-width: 767px) {
-
   .pdf-topbar {
     height: 56px;
-
     min-height: 56px;
 
     padding:
       0 10px;
   }
 
-
   .book-icon {
     width: 34px;
     height: 34px;
+    min-width: 34px;
   }
-
 
   .album-title {
     font-size:
       13px !important;
 
     max-width:
-      45vw;
+      43vw;
   }
-
 
   .album-subtitle {
     display:
       none;
   }
-
 
   .top-page-counter {
     font-size:
@@ -1237,12 +1283,13 @@
       5px 10px;
   }
 
-
   .top-button {
-    width: 36px;
-    height: 36px;
-  }
+    width:
+      36px !important;
 
+    height:
+      36px !important;
+  }
 
   .album-tabs {
     min-height:
@@ -1252,7 +1299,6 @@
       5px 8px;
   }
 
-
   .album-tab {
     max-width:
       210px;
@@ -1261,33 +1307,15 @@
       5px 10px;
   }
 
-
   .album-heading {
     font-size:
       11px;
   }
 
-
   .pdf-stage {
     padding:
       3px;
   }
-
-
-  .book-wrapper {
-    width:
-      100%;
-
-    max-width:
-      100%;
-  }
-
-
-  .pdf-book {
-    max-width:
-      100vw !important;
-  }
-
 
   .pdf-toolbar {
     height:
@@ -1297,44 +1325,64 @@
       58px;
   }
 
-
   .reset-button {
     display:
       none !important;
   }
-
 
   .toolbar-divider {
     margin:
       0 3px;
   }
 
-
   .zoom-value {
     width:
       36px;
   }
 
+  .zoom-slider-wrapper {
+    width:
+      70px;
+  }
+
+  .nav-button,
+  .next-button {
+    width:
+      38px !important;
+
+    height:
+      38px !important;
+  }
+
+  .control-button {
+    width:
+      36px;
+
+    height:
+      36px;
+  }
 }
 
 
-/* =====================================================
+/* =========================================================
    VERY SMALL MOBILE
-===================================================== */
+========================================================= */
 
 @media (max-width: 400px) {
-
   .album-title {
     display:
       none;
   }
-
 
   .pdf-toolbar {
     padding:
       0 3px;
   }
 
+  .zoom-slider-wrapper {
+    width:
+      55px;
+  }
 
   .control-button {
     width:
@@ -1344,20 +1392,53 @@
       34px;
   }
 
-
   .nav-button,
   .next-button {
     width:
-      38px;
+      36px !important;
 
     height:
-      38px;
+      36px !important;
   }
+}
 
 
-  .zoom-slider {
-    width:
-      55px;
-  }
+/* =========================================================
+   REMOVE POSSIBLE WHITE FLIPBOOK LAYERS
+========================================================= */
 
+.pdf-book * {
+  -webkit-tap-highlight-color:
+    transparent;
+}
+
+.pdf-book .stf__parent,
+.pdf-book .stf__wrapper,
+.pdf-book .stf__block,
+.pdf-book .stf__item {
+  background:
+    transparent !important;
+}
+
+
+/* =========================================================
+   SMOOTH IMAGE RENDERING
+========================================================= */
+
+.pdf-book-page img {
+  image-rendering:
+    auto;
+}
+
+
+/* =========================================================
+   PREVENT SELECTION
+========================================================= */
+
+.pdf-book,
+.pdf-book-page,
+.pdf-book-page img {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
 }
