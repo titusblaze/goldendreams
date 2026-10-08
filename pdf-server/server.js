@@ -5,343 +5,563 @@ const { chromium } = require("playwright");
 
 const app = express();
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 
 app.use(
   cors({
-    origin: true,
+    origin: "*",
+    methods: ["GET", "OPTIONS"],
+    allowedHeaders: ["*"],
   })
 );
 
 app.use(express.json());
 
-const ALLOWED_HOST = "os5.mycloud.com";
 
-function isValidShareUrl(value) {
-  try {
-    const url = new URL(value);
-
-    return (
-      url.protocol === "https:" &&
-      url.hostname === ALLOWED_HOST &&
-      url.pathname.startsWith("/action/share/")
-    );
-  } catch {
-    return false;
-  }
-}
-
-/*
-====================================================
-STREAM PDF FROM MY CLOUD TO CLIENT
-====================================================
-*/
-
-function streamPdf(
-  pdfUrl,
-  cookieHeader,
-  userAgent,
-  res
-) {
-  return new Promise((resolve, reject) => {
-    console.log("");
-    console.log("------------------------------------------");
-    console.log(" STREAMING PDF FROM MY CLOUD");
-    console.log("------------------------------------------");
-
-    const request = https.get(
-      pdfUrl,
-      {
-        headers: {
-          Accept:
-            "application/pdf,application/octet-stream,*/*",
-
-          "User-Agent": userAgent,
-
-          Referer:
-            "https://os5.mycloud.com/",
-
-          Cookie: cookieHeader || "",
-        },
-
-        timeout: 180000,
-      },
-      (response) => {
-        console.log(
-          "PDF HTTP Status:",
-          response.statusCode
-        );
-
-        console.log(
-          "PDF Content-Type:",
-          response.headers["content-type"]
-        );
-
-        console.log(
-          "PDF Content-Length:",
-          response.headers["content-length"] ||
-            "unknown"
-        );
-
-        if (
-          response.statusCode < 200 ||
-          response.statusCode >= 300
-        ) {
-          let errorText = "";
-
-          response.on("data", (chunk) => {
-            errorText += chunk.toString();
-          });
-
-          response.on("end", () => {
-            reject(
-              new Error(
-                `My Cloud returned HTTP ${response.statusCode}: ${errorText.substring(
-                  0,
-                  500
-                )}`
-              )
-            );
-          });
-
-          return;
-        }
-
-        const contentType =
-          response.headers["content-type"] || "";
-
-        if (
-          !contentType
-            .toLowerCase()
-            .includes("application/pdf")
-        ) {
-          reject(
-            new Error(
-              "My Cloud did not return a PDF."
-            )
-          );
-
-          response.resume();
-
-          return;
-        }
-
-        /*
-        ------------------------------------------------
-        SEND PDF HEADERS IMMEDIATELY
-        ------------------------------------------------
-        */
-
-        res.status(200);
-
-        res.setHeader(
-          "Content-Type",
-          "application/pdf"
-        );
-
-        res.setHeader(
-          "Content-Disposition",
-          'inline; filename="golden-dreams.pdf"'
-        );
-
-        if (response.headers["content-length"]) {
-          res.setHeader(
-            "Content-Length",
-            response.headers["content-length"]
-          );
-        }
-
-        res.setHeader(
-          "Cache-Control",
-          "no-store, no-cache, must-revalidate, proxy-revalidate"
-        );
-
-        res.setHeader(
-          "Pragma",
-          "no-cache"
-        );
-
-        res.setHeader(
-          "Expires",
-          "0"
-        );
-
-        console.log("");
-        console.log(
-          "PDF STREAM STARTED"
-        );
-
-        let totalBytes = 0;
-
-        /*
-        ------------------------------------------------
-        STREAM DATA
-        ------------------------------------------------
-        */
-
-        response.on("data", (chunk) => {
-          totalBytes += chunk.length;
-
-          if (!res.headersSent) {
-            return;
-          }
-
-          res.write(chunk);
-
-          if (
-            totalBytes % (1024 * 1024) <
-            chunk.length
-          ) {
-            console.log(
-              "PDF streamed:",
-              (
-                totalBytes /
-                1024 /
-                1024
-              ).toFixed(2),
-              "MB"
-            );
-          }
-        });
-
-        response.on("end", () => {
-          console.log("");
-          console.log(
-            "PDF STREAM COMPLETED"
-          );
-
-          console.log(
-            "Total bytes:",
-            totalBytes
-          );
-
-          res.end();
-
-          resolve();
-        });
-
-        response.on("error", (error) => {
-          console.error(
-            "PDF stream error:",
-            error.message
-          );
-
-          if (!res.headersSent) {
-            reject(error);
-          } else {
-            res.destroy(error);
-            reject(error);
-          }
-        });
-
-        /*
-        ------------------------------------------------
-        CLIENT DISCONNECTED
-        ------------------------------------------------
-        */
-
-        res.on("close", () => {
-          if (!res.writableEnded) {
-            console.log(
-              "Client connection closed."
-            );
-
-            response.destroy();
-          }
-        });
-      }
-    );
-
-    request.on("timeout", () => {
-      console.log(
-        "PDF request timed out."
-      );
-
-      request.destroy(
-        new Error(
-          "My Cloud PDF download timed out."
-        )
-      );
-    });
-
-    request.on("error", (error) => {
-      console.error(
-        "HTTPS request error:",
-        error.message
-      );
-
-      if (!res.headersSent) {
-        reject(error);
-      }
-    });
-  });
-}
-
-/*
-====================================================
-ROOT
-====================================================
-*/
+/* =========================================================
+   BASIC ROUTE
+========================================================= */
 
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message:
-      "Golden Dreams PDF server running",
-    port: PORT,
+    message: "Golden Dreams PDF server running",
+    api: "/api/pdf",
+    port: String(PORT),
   });
 });
 
-/*
-====================================================
-PDF API
-====================================================
-*/
 
-app.get("/api/pdf", async (req, res) => {
-  const shareUrl = req.query.url;
+/* =========================================================
+   VALIDATE MY CLOUD URL
+========================================================= */
 
-  console.log("");
-  console.log("==========================================");
-  console.log(
-    " GOLDEN DREAMS PDF REQUEST"
-  );
-  console.log("==========================================");
-
-  console.log("Share URL:");
-  console.log(shareUrl);
-
-  if (!shareUrl) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "Missing My Cloud share URL",
-    });
-  }
-
-  if (!isValidShareUrl(shareUrl)) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "Invalid My Cloud OS 5 share URL",
-    });
-  }
-
-  let browser = null;
-
+function isValidMyCloudShareUrl(url) {
   try {
-    /*
-    ==================================================
-    LAUNCH CHROMIUM
-    ==================================================
-    */
+    const parsed = new URL(url);
 
-    console.log("");
-    console.log(
-      "Launching Chromium..."
+    return (
+      parsed.protocol === "https:" &&
+      parsed.hostname === "os5.mycloud.com" &&
+      parsed.pathname.startsWith("/action/share/")
+    );
+  } catch (error) {
+    return false;
+  }
+}
+
+
+/* =========================================================
+   GET COOKIES
+========================================================= */
+
+function cookiesToHeader(cookies) {
+  return cookies
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .join("; ");
+}
+
+
+/* =========================================================
+   STREAM PDF USING NODE HTTPS
+========================================================= */
+
+function streamPdfFromMyCloud({
+  contentUrl,
+  cookies,
+  userAgent,
+  referer,
+  res,
+}) {
+  return new Promise((resolve, reject) => {
+
+    console.log("------------------------------------------");
+    console.log("STREAMING PDF FROM MY CLOUD");
+    console.log("------------------------------------------");
+
+    console.log("Content URL:");
+    console.log(contentUrl);
+
+    let finished = false;
+    let totalBytes = 0;
+
+
+    const requestOptions = {
+      method: "GET",
+
+      headers: {
+        "User-Agent":
+          userAgent ||
+          "Mozilla/5.0",
+
+        "Accept":
+          "application/pdf,application/octet-stream,*/*",
+
+        "Accept-Encoding":
+          "identity",
+
+        "Referer":
+          referer ||
+          "https://os5.mycloud.com/",
+
+        "Cookie":
+          cookies || "",
+      },
+
+      timeout: 180000,
+    };
+
+
+    const request =
+      https.request(
+        contentUrl,
+        requestOptions,
+        (upstream) => {
+
+          console.log("------------------------------------------");
+          console.log("MY CLOUD CONTENT RESPONSE");
+          console.log("------------------------------------------");
+
+          console.log(
+            "Status:",
+            upstream.statusCode
+          );
+
+          console.log(
+            "Content-Type:",
+            upstream.headers[
+              "content-type"
+            ]
+          );
+
+          console.log(
+            "Content-Length:",
+            upstream.headers[
+              "content-length"
+            ]
+          );
+
+
+          /* ==========================================
+             HANDLE REDIRECT
+          ========================================== */
+
+          if (
+            upstream.statusCode >= 300 &&
+            upstream.statusCode < 400 &&
+            upstream.headers.location
+          ) {
+
+            console.log(
+              "My Cloud redirected PDF request."
+            );
+
+            upstream.resume();
+
+            return streamPdfFromMyCloud({
+              contentUrl:
+                new URL(
+                  upstream.headers.location,
+                  contentUrl
+                ).toString(),
+
+              cookies,
+
+              userAgent,
+
+              referer,
+
+              res,
+            })
+              .then(resolve)
+              .catch(reject);
+
+          }
+
+
+          /* ==========================================
+             UPSTREAM ERROR
+          ========================================== */
+
+          if (
+            upstream.statusCode !== 200
+          ) {
+
+            let errorBody = "";
+
+            upstream.setEncoding(
+              "utf8"
+            );
+
+            upstream.on(
+              "data",
+              (chunk) => {
+
+                if (
+                  errorBody.length < 2000
+                ) {
+
+                  errorBody += chunk;
+
+                }
+
+              }
+            );
+
+            upstream.on(
+              "end",
+              () => {
+
+                reject(
+                  new Error(
+                    `My Cloud returned HTTP ${upstream.statusCode}: ${errorBody}`
+                  )
+                );
+
+              }
+            );
+
+            return;
+
+          }
+
+
+          /* ==========================================
+             CHECK CONTENT TYPE
+          ========================================== */
+
+          const contentType =
+            String(
+              upstream.headers[
+                "content-type"
+              ] || ""
+            ).toLowerCase();
+
+
+          if (
+            !contentType.includes(
+              "application/pdf"
+            )
+          ) {
+
+            let body = "";
+
+            upstream.setEncoding(
+              "utf8"
+            );
+
+            upstream.on(
+              "data",
+              (chunk) => {
+
+                if (
+                  body.length < 2000
+                ) {
+
+                  body += chunk;
+
+                }
+
+              }
+            );
+
+            upstream.on(
+              "end",
+              () => {
+
+                reject(
+                  new Error(
+                    `My Cloud did not return PDF. Content-Type: ${contentType}. ${body}`
+                  )
+                );
+
+              }
+            );
+
+            return;
+
+          }
+
+
+          /* ==========================================
+             SET RESPONSE HEADERS
+          ========================================== */
+
+          res.status(200);
+
+          res.setHeader(
+            "Content-Type",
+            "application/pdf"
+          );
+
+          res.setHeader(
+            "Content-Disposition",
+            'inline; filename="golden-dreams-album.pdf"'
+          );
+
+          res.setHeader(
+            "Cache-Control",
+            "no-store, no-cache, must-revalidate"
+          );
+
+          res.setHeader(
+            "Pragma",
+            "no-cache"
+          );
+
+          res.setHeader(
+            "Expires",
+            "0"
+          );
+
+          res.setHeader(
+            "X-Content-Type-Options",
+            "nosniff"
+          );
+
+
+          /* ==========================================
+             CONTENT LENGTH
+          ========================================== */
+
+          const contentLength =
+            upstream.headers[
+              "content-length"
+            ];
+
+
+          if (contentLength) {
+
+            res.setHeader(
+              "Content-Length",
+              contentLength
+            );
+
+          }
+
+
+          console.log(
+            "PDF HTTP Status:",
+            upstream.statusCode
+          );
+
+          console.log(
+            "PDF Content-Type:",
+            contentType
+          );
+
+          console.log(
+            "PDF Content-Length:",
+            contentLength ||
+              "unknown"
+          );
+
+          console.log(
+            "PDF STREAM STARTED"
+          );
+
+
+          /* ==========================================
+             STREAM DATA
+          ========================================== */
+
+          upstream.on(
+            "data",
+            (chunk) => {
+
+              totalBytes +=
+                chunk.length;
+
+            }
+          );
+
+
+          upstream.on(
+            "end",
+            () => {
+
+              console.log(
+                "PDF STREAM COMPLETED"
+              );
+
+              console.log(
+                "Total bytes:",
+                totalBytes
+              );
+
+              console.log(
+                "=========================================="
+              );
+
+
+              if (
+                totalBytes === 0
+              ) {
+
+                if (!res.headersSent) {
+
+                  reject(
+                    new Error(
+                      "My Cloud returned an empty PDF."
+                    )
+                  );
+
+                } else {
+
+                  res.end();
+
+                  reject(
+                    new Error(
+                      "My Cloud returned an empty PDF."
+                    )
+                  );
+
+                }
+
+                return;
+
+              }
+
+
+              if (!res.writableEnded) {
+
+                res.end();
+
+              }
+
+
+              finished = true;
+
+              resolve();
+
+            }
+          );
+
+
+          upstream.on(
+            "error",
+            (error) => {
+
+              console.error(
+                "My Cloud stream error:",
+                error
+              );
+
+
+              if (
+                !res.headersSent
+              ) {
+
+                reject(error);
+
+              } else {
+
+                res.destroy(
+                  error
+                );
+
+                reject(error);
+
+              }
+
+            }
+          );
+
+
+          /* ==========================================
+             PIPE PDF TO CLIENT
+          ========================================== */
+
+          upstream.pipe(res);
+
+        }
+      );
+
+
+    request.on(
+      "timeout",
+      () => {
+
+        console.error(
+          "My Cloud request timeout."
+        );
+
+        request.destroy(
+          new Error(
+            "My Cloud PDF request timed out."
+          )
+        );
+
+      }
     );
 
-    browser = await chromium.launch({
+
+    request.on(
+      "error",
+      (error) => {
+
+        console.error(
+          "HTTPS request error:",
+          error
+        );
+
+
+        if (!finished) {
+
+          reject(error);
+
+        }
+
+      }
+    );
+
+
+    request.end();
+
+  });
+}
+
+
+/* =========================================================
+   FIND MY CLOUD PDF URL
+========================================================= */
+
+async function findMyCloudPdf(
+  shareUrl
+) {
+
+  console.log(
+    "=========================================="
+  );
+
+  console.log(
+    "GOLDEN DREAMS PDF REQUEST"
+  );
+
+  console.log(
+    "=========================================="
+  );
+
+  console.log(
+    "Share URL:"
+  );
+
+  console.log(
+    shareUrl
+  );
+
+
+  /* ==========================================
+     LAUNCH CHROMIUM
+  ========================================== */
+
+  console.log(
+    "Launching Chromium..."
+  );
+
+
+  const browser =
+    await chromium.launch({
       headless: true,
 
       args: [
@@ -349,122 +569,178 @@ app.get("/api/pdf", async (req, res) => {
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
         "--disable-gpu",
+        "--no-zygote",
+        "--disable-software-rasterizer",
       ],
     });
 
-    console.log(
-      "Chromium launched."
-    );
 
-    const userAgent =
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-      "AppleWebKit/537.36 (KHTML, like Gecko) " +
-      "Chrome/154.0.0.0 Safari/537.36";
+  console.log(
+    "Chromium launched."
+  );
+
+
+  try {
 
     const context =
       await browser.newContext({
-        viewport: {
-          width: 1440,
-          height: 1000,
-        },
+        userAgent:
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/154.0.0.0 Safari/537.36",
 
-        userAgent,
+        acceptDownloads:
+          true,
 
-        extraHTTPHeaders: {
-          "Accept-Language":
-            "en-US,en;q=0.9",
-        },
+        ignoreHTTPSErrors:
+          true,
       });
+
 
     const page =
       await context.newPage();
 
-    /*
-    ==================================================
-    CAPTURE AUTHENTICATED PDF REQUEST
-    ==================================================
-    */
 
-    let authenticatedPdfUrl =
+    /* ==========================================
+       CAPTURE CONTENT URL
+    ========================================== */
+
+    let capturedContentUrl =
       null;
+
+
+    let capturedPdfUrl =
+      null;
+
+
+    const captureUrl =
+      (url) => {
+
+        if (!url) return;
+
+
+        const lower =
+          url.toLowerCase();
+
+
+        /* --------------------------------------
+           My Cloud SDK content endpoint
+        -------------------------------------- */
+
+        if (
+          lower.includes(
+            "/sdk/v2/files/"
+          ) &&
+          lower.includes(
+            "/content"
+          )
+        ) {
+
+          if (
+            !capturedContentUrl
+          ) {
+
+            capturedContentUrl =
+              url;
+
+            console.log(
+              "CONTENT URL CAPTURED"
+            );
+
+          }
+
+        }
+
+
+        /* --------------------------------------
+           PDF / download fallback
+        -------------------------------------- */
+
+        if (
+          lower.includes(
+            ".pdf"
+          ) ||
+          lower.includes(
+            "download"
+          )
+        ) {
+
+          if (
+            !capturedPdfUrl
+          ) {
+
+            capturedPdfUrl =
+              url;
+
+            console.log(
+              "POSSIBLE PDF URL CAPTURED"
+            );
+
+          }
+
+        }
+
+      };
+
+
+    /* ==========================================
+       REQUEST LISTENER
+    ========================================== */
 
     page.on(
       "request",
       (request) => {
-        try {
-          const url =
-            request.url();
 
-          if (
-            url.includes(
-              "/sdk/v2/files/"
-            ) &&
-            url.includes(
-              "/content"
-            )
-          ) {
-            console.log("");
-            console.log(
-              "------------------------------------------"
-            );
-            console.log(
-              " MY CLOUD CONTENT REQUEST"
-            );
-            console.log(
-              "------------------------------------------"
-            );
+        const url =
+          request.url();
 
-            console.log(
-              "Method:",
-              request.method()
-            );
 
-            console.log(
-              "Content URL captured."
-            );
+        if (
+          url.includes(
+            "mycloud.com"
+          )
+        ) {
 
-            authenticatedPdfUrl =
-              url;
-          }
-        } catch (error) {
-          console.log(
-            "Request listener error:",
-            error.message
-          );
+          captureUrl(url);
+
         }
+
       }
     );
 
-    /*
-    ==================================================
-    RESPONSE MONITOR
-    ==================================================
-    */
+
+    /* ==========================================
+       RESPONSE LISTENER
+    ========================================== */
 
     page.on(
       "response",
       (response) => {
-        try {
-          const url =
-            response.url();
+
+        const url =
+          response.url();
+
+
+        if (
+          url.includes(
+            "mycloud.com"
+          )
+        ) {
+
+          const contentType =
+            String(
+              response.headers()[
+                "content-type"
+              ] || ""
+            ).toLowerCase();
+
 
           if (
-            url.includes(
-              "/sdk/v2/files/"
-            ) &&
-            url.includes(
-              "/content"
+            contentType.includes(
+              "application/pdf"
             )
           ) {
-            console.log("");
+
             console.log(
-              "------------------------------------------"
-            );
-            console.log(
-              " MY CLOUD CONTENT RESPONSE"
-            );
-            console.log(
-              "------------------------------------------"
+              "PDF RESPONSE DETECTED"
             );
 
             console.log(
@@ -472,207 +748,343 @@ app.get("/api/pdf", async (req, res) => {
               response.status()
             );
 
-            console.log(
-              "Content-Type:",
-              response.headers()[
-                "content-type"
-              ] || ""
-            );
+
+            capturedPdfUrl =
+              url;
+
           }
-        } catch (error) {
-          console.log(
-            "Response listener error:",
-            error.message
-          );
+
+
+          captureUrl(url);
+
         }
+
       }
     );
 
-    /*
-    ==================================================
-    OPEN MY CLOUD
-    ==================================================
-    */
 
-    console.log("");
+    /* ==========================================
+       OPEN MY CLOUD
+    ========================================== */
+
     console.log(
       "Opening My Cloud share..."
     );
 
-    try {
-      await page.goto(
-        shareUrl,
-        {
-          waitUntil: "commit",
-          timeout: 30000,
-        }
-      );
 
-      console.log(
-        "My Cloud navigation committed."
-      );
-    } catch (error) {
-      console.log("");
-      console.log(
-        "Navigation warning:",
-        error.message
-      );
+    await page.goto(
+      shareUrl,
+      {
+        waitUntil:
+          "domcontentloaded",
 
-      console.log(
-        "Continuing..."
-      );
-    }
+        timeout:
+          120000,
+      }
+    );
 
-    /*
-    ==================================================
-    WAIT FOR AUTHENTICATED URL
-    ==================================================
-    */
 
-    console.log("");
+    console.log(
+      "My Cloud navigation committed."
+    );
+
+
+    /* ==========================================
+       WAIT FOR CONTENT REQUEST
+    ========================================== */
+
     console.log(
       "Waiting for My Cloud PDF URL..."
     );
 
+
     const startTime =
       Date.now();
 
+
     while (
-      !authenticatedPdfUrl &&
-      Date.now() - startTime <
-        90000
+      !capturedContentUrl &&
+      !capturedPdfUrl &&
+      Date.now() -
+        startTime <
+        120000
     ) {
+
       await page.waitForTimeout(
-        500
+        1000
       );
+
+
+      /* --------------------------------------
+         Check page URL
+      -------------------------------------- */
+
+      captureUrl(
+        page.url()
+      );
+
+
+      /* --------------------------------------
+         Check performance resources
+      -------------------------------------- */
+
+      try {
+
+        const resources =
+          await page.evaluate(
+            () =>
+              performance
+                .getEntriesByType(
+                  "resource"
+                )
+                .map(
+                  (entry) =>
+                    entry.name
+                )
+          );
+
+
+        for (
+          const url of resources
+        ) {
+
+          captureUrl(url);
+
+        }
+
+      } catch (_) {}
+
     }
 
-    if (!authenticatedPdfUrl) {
-      throw new Error(
-        "My Cloud did not create the PDF content request within 90 seconds."
-      );
-    }
 
-    console.log("");
-    console.log(
-      "=========================================="
-    );
-    console.log(
-      " AUTHENTICATED PDF URL FOUND"
-    );
-    console.log(
-      "=========================================="
+    /* ==========================================
+       WAIT A LITTLE AFTER CAPTURE
+    ========================================== */
+
+    await page.waitForTimeout(
+      1500
     );
 
-    /*
-    ==================================================
-    GET COOKIES
-    ==================================================
-    */
+
+    /* ==========================================
+       GET COOKIES
+    ========================================== */
 
     const cookies =
       await context.cookies();
 
-    const cookieHeader =
-      cookies
-        .map(
-          (cookie) =>
-            `${cookie.name}=${cookie.value}`
-        )
-        .join("; ");
 
-    console.log("");
+    const cookieHeader =
+      cookiesToHeader(
+        cookies
+      );
+
+
     console.log(
       "Browser cookies:",
       cookies.length
     );
 
-    /*
-    ==================================================
-    STREAM PDF
-    ==================================================
-    */
 
-    await streamPdf(
-      authenticatedPdfUrl,
-      cookieHeader,
-      userAgent,
-      res
-    );
+    /* ==========================================
+       SELECT CONTENT URL
+    ========================================== */
 
-    console.log("");
+    const contentUrl =
+      capturedContentUrl ||
+      capturedPdfUrl;
+
+
+    if (!contentUrl) {
+
+      throw new Error(
+        "Unable to find My Cloud PDF content URL."
+      );
+
+    }
+
+
     console.log(
       "=========================================="
     );
+
     console.log(
-      " PDF SENT SUCCESSFULLY"
+      "AUTHENTICATED PDF URL FOUND"
     );
+
     console.log(
       "=========================================="
     );
 
-  } catch (error) {
-    console.error("");
-    console.error(
-      "=========================================="
-    );
-    console.error(
-      " PDF SERVER ERROR"
-    );
-    console.error(
-      "=========================================="
+
+    console.log(
+      "Content URL captured."
     );
 
-    console.error(
-      "Error:",
-      error.message
+
+    return {
+      contentUrl,
+
+      cookies:
+        cookieHeader,
+
+      userAgent:
+        await page.evaluate(
+          () =>
+            navigator.userAgent
+        ),
+
+      referer:
+        page.url(),
+    };
+
+  } finally {
+
+    await browser.close();
+
+    console.log(
+      "Chromium closed."
     );
 
-    if (
-      !res.headersSent
-    ) {
-      res.status(500).json({
+  }
+}
+
+
+/* =========================================================
+   PDF API
+========================================================= */
+
+app.get(
+  "/api/pdf",
+  async (req, res) => {
+
+    const shareUrl =
+      req.query.url;
+
+
+    /* ==========================================
+       VALIDATE URL
+    ========================================== */
+
+    if (!shareUrl) {
+
+      return res.status(400).json({
         success: false,
         message:
-          "Unable to retrieve PDF from My Cloud.",
-        error:
-          error.message,
+          "Missing My Cloud share URL",
       });
-    }
-  } finally {
-    if (browser) {
-      try {
-        await browser.close();
 
-        console.log(
-          "Chromium closed."
+    }
+
+
+    if (
+      !isValidMyCloudShareUrl(
+        shareUrl
+      )
+    ) {
+
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid My Cloud share URL",
+      });
+
+    }
+
+
+    let pdfInfo = null;
+
+
+    try {
+
+      pdfInfo =
+        await findMyCloudPdf(
+          shareUrl
         );
-      } catch (error) {
-        console.log(
-          "Browser close error:",
-          error.message
-        );
+
+
+      await streamPdfFromMyCloud({
+        contentUrl:
+          pdfInfo.contentUrl,
+
+        cookies:
+          pdfInfo.cookies,
+
+        userAgent:
+          pdfInfo.userAgent,
+
+        referer:
+          pdfInfo.referer,
+
+        res,
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "=========================================="
+      );
+
+      console.error(
+        "PDF SERVER ERROR"
+      );
+
+      console.error(
+        error
+      );
+
+      console.error(
+        "=========================================="
+      );
+
+
+      if (
+        !res.headersSent
+      ) {
+
+        return res.status(500).json({
+          success: false,
+
+          message:
+            error?.message ||
+            "Unable to retrieve PDF",
+        });
+
       }
-    }
-  }
-});
 
-/*
-====================================================
-START SERVER
-====================================================
-*/
+
+      try {
+
+        res.destroy(
+          error
+        );
+
+      } catch (_) {}
+
+    }
+
+  }
+);
+
+
+/* =========================================================
+   SERVER
+========================================================= */
 
 app.listen(
   PORT,
+  "0.0.0.0",
   () => {
-    console.log("");
+
     console.log(
       "=========================================="
     );
+
     console.log(
-      " Golden Dreams PDF Server"
+      "GOLDEN DREAMS PDF SERVER"
     );
+
     console.log(
       "=========================================="
     );
@@ -682,13 +1094,8 @@ app.listen(
     );
 
     console.log(
-      "PDF API: /api/pdf"
+      "API: /api/pdf"
     );
 
-    console.log(
-      "=========================================="
-    );
-
-    console.log("");
   }
 );
