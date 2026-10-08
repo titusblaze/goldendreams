@@ -29,10 +29,8 @@ import {
 import HTMLFlipBook from "react-pageflip";
 import * as pdfjsLib from "pdfjs-dist";
 
-import "./LoginPdf2.css";
-
 /* =========================================================
-   API CONFIG
+   API
 ========================================================= */
 
 const DATA_API =
@@ -131,6 +129,54 @@ const LoginPdf2 = () => {
 
 
   /* =======================================================
+     BOOK SIZE
+  ======================================================= */
+
+  const getBookSize = () => {
+
+    const width =
+      window.innerWidth;
+
+    if (width <= 600) {
+
+      return {
+        width: 290,
+        height: 410,
+      };
+
+    }
+
+    if (width <= 900) {
+
+      return {
+        width: 360,
+        height: 510,
+      };
+
+    }
+
+    if (width <= 1200) {
+
+      return {
+        width: 430,
+        height: 610,
+      };
+
+    }
+
+    return {
+      width: 500,
+      height: 700,
+    };
+
+  };
+
+
+  const [bookSize, setBookSize] =
+    useState(getBookSize());
+
+
+  /* =======================================================
      REFS
   ======================================================= */
 
@@ -143,14 +189,14 @@ const LoginPdf2 = () => {
   const abortControllerRef =
     useRef(null);
 
+
   /*
    * IMPORTANT:
    *
-   * Store ArrayBuffer instead of Uint8Array.
-   *
-   * PDF.js can transfer/detach Uint8Array buffers.
-   * We create a fresh copy every time PDF.js needs it.
+   * Keep ArrayBuffer cache.
+   * Never directly reuse Uint8Array with PDF.js.
    */
+
   const pdfBufferCacheRef =
     useRef(new Map());
 
@@ -160,23 +206,45 @@ const LoginPdf2 = () => {
   const renderedPageCacheRef =
     useRef(new Map());
 
-  /*
-   * Current PDF.js loading task.
-   */
   const pdfLoadingTaskRef =
     useRef(null);
 
-  /*
-   * Current loaded PDF.js document.
-   */
   const pdfDocumentRef =
     useRef(null);
 
-  /*
-   * Current page render task.
-   */
   const renderTaskRef =
     useRef(null);
+
+
+  /* =======================================================
+     RESIZE
+  ======================================================= */
+
+  useEffect(() => {
+
+    const resize = () => {
+
+      setBookSize(
+        getBookSize()
+      );
+
+    };
+
+    window.addEventListener(
+      "resize",
+      resize
+    );
+
+    return () => {
+
+      window.removeEventListener(
+        "resize",
+        resize
+      );
+
+    };
+
+  }, []);
 
 
   /* =======================================================
@@ -192,7 +260,11 @@ const LoginPdf2 = () => {
       try {
 
         setLoading(true);
-        setLoadingText("Loading albums...");
+
+        setLoadingText(
+          "Loading albums..."
+        );
+
         setError("");
 
         const response =
@@ -310,9 +382,6 @@ const LoginPdf2 = () => {
 
         if (!album?.pdf) return;
 
-        /*
-         * Cancel current PDF work immediately.
-         */
         try {
 
           if (
@@ -350,7 +419,9 @@ const LoginPdf2 = () => {
         } catch (_) {}
 
         renderTaskRef.current = null;
+
         pdfLoadingTaskRef.current = null;
+
         pdfDocumentRef.current = null;
 
         setSelectedPDF(
@@ -359,7 +430,7 @@ const LoginPdf2 = () => {
 
         setSelectedHeading(
           album.heading ||
-            "Digital Album"
+          "Digital Album"
         );
 
         setPdf(null);
@@ -386,7 +457,7 @@ const LoginPdf2 = () => {
 
 
   /* =======================================================
-     DOWNLOAD PDF FROM RENDER
+     DOWNLOAD / FETCH PDF
   ======================================================= */
 
   const downloadPDF =
@@ -403,7 +474,7 @@ const LoginPdf2 = () => {
 
 
         /* =================================================
-           CACHE CHECK
+           CACHE
         ================================================= */
 
         if (
@@ -412,23 +483,16 @@ const LoginPdf2 = () => {
           )
         ) {
 
-          console.log(
-            "PDF found in ArrayBuffer cache."
-          );
-
           const cachedBuffer =
             pdfBufferCacheRef.current.get(
               albumKey
             );
 
           /*
-           * VERY IMPORTANT
-           *
-           * Never give the cached buffer directly
-           * to PDF.js.
-           *
-           * Create a completely new ArrayBuffer.
+           * VERY IMPORTANT:
+           * Make fresh ArrayBuffer.
            */
+
           const freshBuffer =
             cachedBuffer.slice(0);
 
@@ -453,7 +517,7 @@ const LoginPdf2 = () => {
 
 
         /* =================================================
-           ABORT PREVIOUS REQUEST
+           ABORT PREVIOUS
         ================================================= */
 
         if (
@@ -477,7 +541,7 @@ const LoginPdf2 = () => {
 
 
         /* =================================================
-           PROXY URL
+           PROXY
         ================================================= */
 
         const proxyUrl =
@@ -486,41 +550,13 @@ const LoginPdf2 = () => {
           )}`;
 
 
-        console.log(
-          "================================="
-        );
-
-        console.log(
-          "Downloading PDF..."
-        );
-
-        console.log(
-          "My Cloud Share URL:",
-          albumKey
-        );
-
-        console.log(
-          "Render PDF Proxy:",
-          PDF_PROXY
-        );
-
-        console.log(
-          "PDF Proxy URL:",
-          proxyUrl
-        );
-
-        console.log(
-          "================================="
-        );
-
-
         setLoadingText(
           "Connecting to PDF server..."
         );
 
 
         /* =================================================
-           FETCH PDF
+           FETCH
         ================================================= */
 
         const response =
@@ -546,16 +582,6 @@ const LoginPdf2 = () => {
             }
           );
 
-
-        console.log(
-          "PDF HTTP Status:",
-          response.status
-        );
-
-
-        /* =================================================
-           HTTP ERROR
-        ================================================= */
 
         if (!response.ok) {
 
@@ -586,20 +612,10 @@ const LoginPdf2 = () => {
         }
 
 
-        /* =================================================
-           CONTENT TYPE
-        ================================================= */
-
         const contentType =
           response.headers.get(
             "content-type"
           ) || "";
-
-
-        console.log(
-          "PDF Content-Type:",
-          contentType
-        );
 
 
         if (
@@ -617,47 +633,14 @@ const LoginPdf2 = () => {
         }
 
 
-        /* =================================================
-           CONTENT LENGTH
-        ================================================= */
-
-        console.log(
-          "PDF Content-Length:",
-          response.headers.get(
-            "content-length"
-          )
-        );
-
-        console.log(
-          "PDF Transfer-Encoding:",
-          response.headers.get(
-            "transfer-encoding"
-          )
-        );
-
-
         setLoadingText(
           "Downloading PDF..."
         );
 
 
-        /* =================================================
-           READ RESPONSE ONCE
-        ================================================= */
-
         const arrayBuffer =
           await response.arrayBuffer();
 
-
-        console.log(
-          "PDF ArrayBuffer bytes:",
-          arrayBuffer.byteLength
-        );
-
-
-        /* =================================================
-           EMPTY PDF CHECK
-        ================================================= */
 
         if (
           !arrayBuffer ||
@@ -665,31 +648,14 @@ const LoginPdf2 = () => {
         ) {
 
           throw new Error(
-            "Empty PDF received from PDF server."
+            "Empty PDF received."
           );
 
         }
 
 
         /* =================================================
-           SIZE
-        ================================================= */
-
-        const sizeMB =
-          (
-            arrayBuffer.byteLength /
-            1024 /
-            1024
-          ).toFixed(2);
-
-
-        console.log(
-          `PDF received: ${sizeMB} MB`
-        );
-
-
-        /* =================================================
-           BASIC PDF HEADER CHECK
+           PDF HEADER
         ================================================= */
 
         const headerBytes =
@@ -700,17 +666,10 @@ const LoginPdf2 = () => {
             )
           );
 
-
         const header =
           String.fromCharCode(
             ...headerBytes
           );
-
-
-        console.log(
-          "PDF Header:",
-          header
-        );
 
 
         if (
@@ -719,7 +678,7 @@ const LoginPdf2 = () => {
         ) {
 
           throw new Error(
-            "The server response is not a valid PDF file."
+            "The server response is not a valid PDF."
           );
 
         }
@@ -729,11 +688,6 @@ const LoginPdf2 = () => {
            CACHE ORIGINAL ARRAYBUFFER
         ================================================= */
 
-        /*
-         * We store the ORIGINAL ArrayBuffer.
-         *
-         * PDF.js will never receive this exact buffer.
-         */
         pdfBufferCacheRef.current.set(
           albumKey,
           arrayBuffer
@@ -741,7 +695,7 @@ const LoginPdf2 = () => {
 
 
         /* =================================================
-           CREATE BLOB
+           BLOB
         ================================================= */
 
         const blob =
@@ -760,14 +714,10 @@ const LoginPdf2 = () => {
         );
 
 
-        console.log(
-          `PDF downloaded successfully: ${sizeMB} MB`
-        );
-
-
         /*
-         * Create a fresh copy for this PDF.js load.
+         * Fresh copy for PDF.js.
          */
+
         const freshBuffer =
           arrayBuffer.slice(0);
 
@@ -799,7 +749,6 @@ const LoginPdf2 = () => {
 
     if (!selectedPDF) return;
 
-
     let cancelled = false;
 
     let currentLoadingTask = null;
@@ -812,9 +761,6 @@ const LoginPdf2 = () => {
     const cleanupPDF =
       async () => {
 
-        /*
-         * Cancel canvas rendering.
-         */
         try {
 
           if (
@@ -841,9 +787,6 @@ const LoginPdf2 = () => {
         } catch (_) {}
 
 
-        /*
-         * Destroy PDF.js loading task.
-         */
         try {
 
           if (
@@ -870,9 +813,6 @@ const LoginPdf2 = () => {
         } catch (_) {}
 
 
-        /*
-         * Destroy loaded PDF document.
-         */
         try {
 
           if (
@@ -936,9 +876,9 @@ const LoginPdf2 = () => {
           setCurrentPage(0);
 
 
-          /* =============================================
-             DOWNLOAD
-          ============================================= */
+          /* ============================================
+             FETCH
+          ============================================ */
 
           const result =
             await downloadPDF(
@@ -946,27 +886,15 @@ const LoginPdf2 = () => {
             );
 
 
-          if (cancelled) {
-
-            return;
-
-          }
+          if (cancelled) return;
 
 
           /*
-           * IMPORTANT:
-           *
-           * result.bytes is already a fresh Uint8Array.
-           *
-           * Make one MORE copy before giving it
-           * to PDF.js.
-           *
-           * This guarantees that no cached buffer
-           * can ever be detached.
+           * Create fresh PDF.js buffer.
            */
+
           const sourceBytes =
             result.bytes;
-
 
           const pdfBytes =
             new Uint8Array(
@@ -974,23 +902,12 @@ const LoginPdf2 = () => {
             );
 
 
-          /* =============================================
+          /* ============================================
              PDF.JS
-          ============================================= */
+          ============================================ */
 
           setLoadingText(
             "Opening digital album..."
-          );
-
-
-          console.log(
-            "Loading PDF with PDF.js..."
-          );
-
-
-          console.log(
-            "PDF.js bytes:",
-            pdfBytes.byteLength
           );
 
 
@@ -1027,16 +944,6 @@ const LoginPdf2 = () => {
           }
 
 
-          console.log(
-            "PDF loaded successfully."
-          );
-
-          console.log(
-            "Total pages:",
-            loadedPdf.numPages
-          );
-
-
           setPdf(
             loadedPdf
           );
@@ -1046,9 +953,9 @@ const LoginPdf2 = () => {
           );
 
 
-          /* =============================================
-             RENDER PAGES
-          ============================================= */
+          /* ============================================
+             RENDER ALL PAGES
+          ============================================ */
 
           const renderedPages =
             [];
@@ -1061,11 +968,7 @@ const LoginPdf2 = () => {
             pageNumber++
           ) {
 
-            if (cancelled) {
-
-              break;
-
-            }
+            if (cancelled) break;
 
 
             setLoadingText(
@@ -1113,12 +1016,13 @@ const LoginPdf2 = () => {
             }
 
 
-            /* =========================================
-               SCALE
-            ========================================= */
+            /*
+             * Slightly higher quality for
+             * photographic albums.
+             */
 
             const baseScale =
-              1.25 * zoom;
+              1.35 * zoom;
 
 
             const viewport =
@@ -1158,7 +1062,6 @@ const LoginPdf2 = () => {
                   dpr
               );
 
-
             canvas.height =
               Math.floor(
                 viewport.height *
@@ -1173,9 +1076,9 @@ const LoginPdf2 = () => {
               `${viewport.height}px`;
 
 
-            /* =========================================
+            /* ==========================================
                RENDER
-            ========================================= */
+            ========================================== */
 
             currentRenderTask =
               page.render({
@@ -1215,28 +1118,19 @@ const LoginPdf2 = () => {
 
               } catch (_) {}
 
-              try {
-
-                page.cleanup();
-
-              } catch (_) {}
-
-              canvas.width = 1;
-              canvas.height = 1;
-
               break;
 
             }
 
 
-            /* =========================================
-               JPEG PAGE IMAGE
-            ========================================= */
+            /* ==========================================
+               IMAGE
+            ========================================== */
 
             const image =
               canvas.toDataURL(
                 "image/jpeg",
-                0.82
+                0.9
               );
 
 
@@ -1251,11 +1145,8 @@ const LoginPdf2 = () => {
             );
 
 
-            /* =========================================
-               RELEASE CANVAS
-            ========================================= */
-
             canvas.width = 1;
+
             canvas.height = 1;
 
 
@@ -1272,10 +1163,6 @@ const LoginPdf2 = () => {
             renderTaskRef.current =
               null;
 
-
-            /* =========================================
-               ALLOW BROWSER TO BREATHE
-            ========================================= */
 
             if (
               pageNumber % 2 === 0
@@ -1300,29 +1187,17 @@ const LoginPdf2 = () => {
               renderedPages
             );
 
-            setCurrentPage(
-              0
-            );
+            setCurrentPage(0);
 
-            setLoading(
-              false
-            );
+            setLoading(false);
 
-            setLoadingText(
-              ""
-            );
+            setLoadingText("");
 
           }
 
         } catch (err) {
 
-          if (
-            cancelled
-          ) {
-
-            return;
-
-          }
+          if (cancelled) return;
 
 
           if (
@@ -1335,12 +1210,6 @@ const LoginPdf2 = () => {
           }
 
 
-          /*
-           * PDF.js can throw this when a render task
-           * is cancelled during album switching.
-           *
-           * Do not show it as a real error.
-           */
           if (
             err?.name ===
             "RenderingCancelledException"
@@ -1352,19 +1221,8 @@ const LoginPdf2 = () => {
 
 
           console.error(
-            "================================="
-          );
-
-          console.error(
-            "PDF ERROR"
-          );
-
-          console.error(
+            "PDF ERROR:",
             err
-          );
-
-          console.error(
-            "================================="
           );
 
 
@@ -1375,13 +1233,9 @@ const LoginPdf2 = () => {
                 "Unable to open PDF."
             );
 
-            setLoading(
-              false
-            );
+            setLoading(false);
 
-            setLoadingText(
-              ""
-            );
+            setLoadingText("");
 
           }
 
@@ -1393,16 +1247,10 @@ const LoginPdf2 = () => {
     loadPDF();
 
 
-    /*
-     * Cleanup when:
-     *
-     * - another PDF is selected
-     * - component unmounts
-     * - retry occurs
-     */
     return () => {
 
       cancelled = true;
+
 
       try {
 
@@ -1449,7 +1297,7 @@ const LoginPdf2 = () => {
 
 
   /* =======================================================
-     PREVIOUS PAGE
+     PREVIOUS
   ======================================================= */
 
   const previousPage =
@@ -1471,7 +1319,7 @@ const LoginPdf2 = () => {
 
 
   /* =======================================================
-     NEXT PAGE
+     NEXT
   ======================================================= */
 
   const nextPage =
@@ -1493,7 +1341,7 @@ const LoginPdf2 = () => {
 
 
   /* =======================================================
-     ZOOM IN
+     ZOOM
   ======================================================= */
 
   const zoomIn =
@@ -1502,7 +1350,7 @@ const LoginPdf2 = () => {
       setZoom(
         (value) =>
           Math.min(
-            2,
+            1.5,
             Number(
               (
                 value +
@@ -1514,10 +1362,6 @@ const LoginPdf2 = () => {
 
     }, []);
 
-
-  /* =======================================================
-     ZOOM OUT
-  ======================================================= */
 
   const zoomOut =
     useCallback(() => {
@@ -1555,17 +1399,9 @@ const LoginPdf2 = () => {
             await containerRef.current
               ?.requestFullscreen();
 
-            setIsFullscreen(
-              true
-            );
-
           } else {
 
             await document.exitFullscreen();
-
-            setIsFullscreen(
-              false
-            );
 
           }
 
@@ -1620,7 +1456,7 @@ const LoginPdf2 = () => {
 
 
   /* =======================================================
-     DOWNLOAD ORIGINAL PDF
+     DOWNLOAD
   ======================================================= */
 
   const handleDownload =
@@ -1738,9 +1574,7 @@ const LoginPdf2 = () => {
 
       setError("");
 
-      /*
-       * If we are on album list, reload album API.
-       */
+
       if (!selectedPDF) {
 
         setRetryKey(
@@ -1753,10 +1587,6 @@ const LoginPdf2 = () => {
       }
 
 
-      /*
-       * If a PDF is currently selected,
-       * force the PDF loading effect to run again.
-       */
       setPdfReloadKey(
         (value) =>
           value + 1
@@ -1768,7 +1598,7 @@ const LoginPdf2 = () => {
 
 
   /* =======================================================
-     BACK TO ALBUM LIST
+     BACK
   ======================================================= */
 
   const backToAlbums =
@@ -1776,52 +1606,28 @@ const LoginPdf2 = () => {
 
       try {
 
-        if (
-          abortControllerRef.current
-        ) {
-
-          abortControllerRef.current.abort();
-
-        }
+        abortControllerRef.current?.abort();
 
       } catch (_) {}
 
 
       try {
 
-        if (
-          renderTaskRef.current
-        ) {
-
-          renderTaskRef.current.cancel();
-
-        }
+        renderTaskRef.current?.cancel();
 
       } catch (_) {}
 
 
       try {
 
-        if (
-          pdfLoadingTaskRef.current
-        ) {
-
-          pdfLoadingTaskRef.current.destroy();
-
-        }
+        pdfLoadingTaskRef.current?.destroy();
 
       } catch (_) {}
 
 
       try {
 
-        if (
-          pdfDocumentRef.current
-        ) {
-
-          pdfDocumentRef.current.destroy();
-
-        }
+        pdfDocumentRef.current?.destroy();
 
       } catch (_) {}
 
@@ -1834,6 +1640,7 @@ const LoginPdf2 = () => {
 
       pdfDocumentRef.current =
         null;
+
 
       setSelectedPDF("");
 
@@ -1859,7 +1666,7 @@ const LoginPdf2 = () => {
 
 
   /* =======================================================
-     KEYBOARD CONTROLS
+     KEYBOARD
   ======================================================= */
 
   useEffect(() => {
@@ -1961,102 +1768,6 @@ const LoginPdf2 = () => {
 
 
   /* =======================================================
-     BOOK DIMENSIONS
-  ======================================================= */
-
-  const getBookSize =
-    () => {
-
-      const width =
-        window.innerWidth;
-
-
-      if (
-        width <= 600
-      ) {
-
-        return {
-
-          width:
-            320,
-
-          height:
-            450,
-
-        };
-
-      }
-
-
-      if (
-        width <= 900
-      ) {
-
-        return {
-
-          width:
-            400,
-
-          height:
-            560,
-
-        };
-
-      }
-
-
-      return {
-
-        width:
-          500,
-
-        height:
-          700,
-
-      };
-
-    };
-
-
-  const [
-    bookSize,
-    setBookSize,
-  ] = useState(
-    getBookSize()
-  );
-
-
-  useEffect(() => {
-
-    const resize =
-      () => {
-
-        setBookSize(
-          getBookSize()
-        );
-
-      };
-
-
-    window.addEventListener(
-      "resize",
-      resize
-    );
-
-
-    return () => {
-
-      window.removeEventListener(
-        "resize",
-        resize
-      );
-
-    };
-
-  }, []);
-
-
-  /* =======================================================
      ALBUM LIST
   ======================================================= */
 
@@ -2070,7 +1781,7 @@ const LoginPdf2 = () => {
             "100vh",
 
           background:
-            "linear-gradient(135deg,#050505,#111,#050505)",
+            "radial-gradient(circle at top,#171717 0%,#080808 45%,#020202 100%)",
 
           color:
             "#fff",
@@ -2104,9 +1815,13 @@ const LoginPdf2 = () => {
 
           }}
         >
+
           Golden Dreams
+
           <br />
+
           Digital Albums
+
         </Typography>
 
 
@@ -2125,6 +1840,9 @@ const LoginPdf2 = () => {
 
               gap:
                 2,
+
+              mb:
+                3,
 
             }}
           >
@@ -2174,7 +1892,9 @@ const LoginPdf2 = () => {
 
               }
             >
+
               {error}
+
             </Alert>
 
           </Box>
@@ -2239,7 +1959,7 @@ const LoginPdf2 = () => {
                     "15px",
 
                   background:
-                    "linear-gradient(145deg,#151515,#080808)",
+                    "linear-gradient(145deg,#191919,#080808)",
 
                   border:
                     "1px solid rgba(255,255,255,.12)",
@@ -2257,7 +1977,7 @@ const LoginPdf2 = () => {
                         "rgba(255,193,7,.6)",
 
                       boxShadow:
-                        "0 10px 30px rgba(0,0,0,.5)",
+                        "0 15px 40px rgba(0,0,0,.6)",
 
                     },
 
@@ -2277,7 +1997,9 @@ const LoginPdf2 = () => {
 
                   }}
                 >
+
                   {album.heading}
+
                 </Typography>
 
               </Box>
@@ -2305,7 +2027,9 @@ const LoginPdf2 = () => {
 
               }}
             >
+
               No digital albums found.
+
             </Typography>
 
           )}
@@ -2335,11 +2059,14 @@ const LoginPdf2 = () => {
         width:
           "100%",
 
+        height:
+          "100vh",
+
         minHeight:
           "100vh",
 
         background:
-          "radial-gradient(circle at center,#181818 0%,#050505 75%)",
+          "radial-gradient(circle at center,#171717 0%,#090909 45%,#020202 100%)",
 
         color:
           "#fff",
@@ -2363,8 +2090,11 @@ const LoginPdf2 = () => {
 
       <Box
         sx={{
-          minHeight:
+          height:
             "60px",
+
+          flexShrink:
+            0,
 
           display:
             "flex",
@@ -2375,9 +2105,6 @@ const LoginPdf2 = () => {
           justifyContent:
             "space-between",
 
-          gap:
-            1,
-
           padding:
             "8px 15px",
 
@@ -2385,13 +2112,13 @@ const LoginPdf2 = () => {
             "1px solid rgba(255,255,255,.08)",
 
           background:
-            "rgba(0,0,0,.7)",
+            "rgba(0,0,0,.78)",
 
           backdropFilter:
-            "blur(10px)",
+            "blur(16px)",
 
           zIndex:
-            20,
+            100,
 
         }}
       >
@@ -2423,6 +2150,13 @@ const LoginPdf2 = () => {
               sx={{
                 color:
                   "#fff",
+
+                "&:hover":
+                  {
+                    background:
+                      "rgba(255,255,255,.1)",
+                  },
+
               }}
             >
 
@@ -2458,7 +2192,9 @@ const LoginPdf2 = () => {
 
             }}
           >
+
             {selectedHeading}
+
           </Typography>
 
         </Box>
@@ -2473,7 +2209,7 @@ const LoginPdf2 = () => {
               "center",
 
             gap:
-              0.5,
+              0.3,
 
           }}
         >
@@ -2501,19 +2237,24 @@ const LoginPdf2 = () => {
           <Typography
             sx={{
               minWidth:
-                "50px",
+                "45px",
 
               textAlign:
                 "center",
 
               fontSize:
-                "14px",
+                "13px",
+
+              opacity:
+                0.8,
 
             }}
           >
+
             {Math.round(
               zoom * 100
             )}%
+
           </Typography>
 
 
@@ -2557,13 +2298,9 @@ const LoginPdf2 = () => {
             >
 
               {isFullscreen ? (
-
                 <FullscreenExit />
-
               ) : (
-
                 <Fullscreen />
-
               )}
 
             </IconButton>
@@ -2619,7 +2356,7 @@ const LoginPdf2 = () => {
               "min(90%,600px)",
 
             zIndex:
-              50,
+              500,
 
           }}
         >
@@ -2651,7 +2388,7 @@ const LoginPdf2 = () => {
 
 
       {/* =================================================
-          VIEWER
+          BOOK STAGE
       ================================================= */}
 
       <Box
@@ -2671,20 +2408,71 @@ const LoginPdf2 = () => {
           justifyContent:
             "center",
 
-          padding:
-            {
-              xs:
-                "15px 5px 80px",
-
-              md:
-                "20px 20px 80px",
-            },
-
           overflow:
-            "auto",
+            "hidden",
+
+          perspective:
+            "2200px",
+
+          background:
+            "radial-gradient(circle at center,rgba(255,255,255,.025),transparent 55%)",
 
         }}
       >
+
+
+        {/* ===============================================
+            AMBIENT BOOK SHADOW
+        =============================================== */}
+
+        {!loading &&
+          pages.length > 0 && (
+
+            <Box
+              sx={{
+                position:
+                  "absolute",
+
+                width:
+                  {
+                    xs:
+                      "80%",
+
+                    md:
+                      "700px",
+                  },
+
+                height:
+                  "90px",
+
+                bottom:
+                  "8%",
+
+                left:
+                  "50%",
+
+                transform:
+                  "translateX(-50%)",
+
+                background:
+                  "rgba(0,0,0,.85)",
+
+                filter:
+                  "blur(35px)",
+
+                borderRadius:
+                  "50%",
+
+                opacity:
+                  0.9,
+
+                pointerEvents:
+                  "none",
+
+              }}
+            />
+
+          )}
 
 
         {/* ===============================================
@@ -2714,20 +2502,156 @@ const LoginPdf2 = () => {
                 "center",
 
               zIndex:
-                10,
+                300,
 
               background:
-                "rgba(0,0,0,.5)",
+                "rgba(0,0,0,.7)",
 
               backdropFilter:
-                "blur(5px)",
+                "blur(10px)",
 
             }}
           >
 
+            {/* 3D loading book */}
+
+            <Box
+              sx={{
+                width:
+                  "80px",
+
+                height:
+                  "105px",
+
+                position:
+                  "relative",
+
+                transform:
+                  "perspective(500px) rotateY(-25deg)",
+
+                transformStyle:
+                  "preserve-3d",
+
+                mb:
+                  3,
+
+                animation:
+                  "albumLoading 1.6s ease-in-out infinite",
+
+                "@keyframes albumLoading":
+                  {
+
+                    "0%":
+                      {
+                        transform:
+                          "perspective(500px) rotateY(-30deg) rotateZ(-1deg)",
+                      },
+
+                    "50%":
+                      {
+                        transform:
+                          "perspective(500px) rotateY(20deg) rotateZ(1deg)",
+                      },
+
+                    "100%":
+                      {
+                        transform:
+                          "perspective(500px) rotateY(-30deg) rotateZ(-1deg)",
+                      },
+
+                  },
+
+              }}
+            >
+
+              <Box
+                sx={{
+                  position:
+                    "absolute",
+
+                  inset:
+                    0,
+
+                  background:
+                    "linear-gradient(135deg,#292929,#080808)",
+
+                  border:
+                    "1px solid rgba(255,255,255,.3)",
+
+                  borderRadius:
+                    "3px 8px 8px 3px",
+
+                  boxShadow:
+                    "8px 12px 25px rgba(0,0,0,.7)",
+
+                }}
+              />
+
+              <Box
+                sx={{
+                  position:
+                    "absolute",
+
+                  inset:
+                    0,
+
+                  top:
+                    5,
+
+                  left:
+                    6,
+
+                  right:
+                    8,
+
+                  bottom:
+                    5,
+
+                  border:
+                    "1px solid rgba(255,255,255,.18)",
+
+                  borderRadius:
+                    "2px 6px 6px 2px",
+
+                }}
+              />
+
+              <Box
+                sx={{
+                  position:
+                    "absolute",
+
+                  left:
+                    8,
+
+                  top:
+                    "50%",
+
+                  width:
+                    2,
+
+                  height:
+                    "90%",
+
+                  transform:
+                    "translateY(-50%)",
+
+                  background:
+                    "rgba(255,255,255,.25)",
+
+                  boxShadow:
+                    "2px 0 4px rgba(0,0,0,.7)",
+
+                }}
+              />
+
+            </Box>
+
+
             <CircularProgress
-              size={45}
+              size={32}
             />
+
 
             <Typography
               sx={{
@@ -2738,11 +2662,13 @@ const LoginPdf2 = () => {
                   "14px",
 
                 opacity:
-                  0.85,
+                  0.8,
 
               }}
             >
+
               {loadingText}
+
             </Typography>
 
           </Box>
@@ -2751,7 +2677,7 @@ const LoginPdf2 = () => {
 
 
         {/* ===============================================
-            BOOK
+            3D BOOK
         =============================================== */}
 
         {!loading &&
@@ -2759,6 +2685,18 @@ const LoginPdf2 = () => {
 
             <Box
               sx={{
+                position:
+                  "relative",
+
+                display:
+                  "flex",
+
+                alignItems:
+                  "center",
+
+                justifyContent:
+                  "center",
+
                 transform:
                   `scale(${zoom})`,
 
@@ -2766,181 +2704,337 @@ const LoginPdf2 = () => {
                   "center center",
 
                 transition:
-                  "transform .2s ease",
+                  "transform .25s ease",
 
-                display:
-                  "flex",
+                transformStyle:
+                  "preserve-3d",
 
-                justifyContent:
-                  "center",
+                zIndex:
+                  20,
 
-                alignItems:
-                  "center",
+                /*
+                 * Important:
+                 * Do not clip react-pageflip's
+                 * 3D turning sheet.
+                 */
+                overflow:
+                  "visible",
 
               }}
             >
 
-              <HTMLFlipBook
 
-                ref={
-                  flipBookRef
-                }
+              {/* =========================================
+                  BOOK BACK / DEPTH
+              ========================================= */}
 
-                width={
-                  bookSize.width
-                }
+              <Box
+                sx={{
+                  position:
+                    "absolute",
 
-                height={
-                  bookSize.height
-                }
+                  width:
+                    bookSize.width * 2,
 
-                size="fixed"
+                  height:
+                    bookSize.height,
 
-                minWidth={
-                  280
-                }
+                  borderRadius:
+                    "5px",
 
-                maxWidth={
-                  900
-                }
+                  background:
+                    "linear-gradient(90deg,#151515,#050505 50%,#151515)",
 
-                minHeight={
-                  380
-                }
+                  transform:
+                    "translateZ(-18px)",
 
-                maxHeight={
-                  1200
-                }
+                  boxShadow:
+                    "0 30px 80px rgba(0,0,0,.9)",
 
-                drawShadow={
-                  true
-                }
+                  pointerEvents:
+                    "none",
 
-                flippingTime={
-                  650
-                }
+                  zIndex:
+                    0,
 
-                usePortrait={
-                  true
-                }
+                }}
+              />
 
-                startPage={
-                  0
-                }
 
-                autoSize={
-                  true
-                }
+              {/* =========================================
+                  FLIP BOOK
+              ========================================= */}
 
-                maxShadowOpacity={
-                  0.5
-                }
+              <Box
+                sx={{
+                  position:
+                    "relative",
 
-                showCover={
-                  false
-                }
+                  zIndex:
+                    5,
 
-                mobileScrollSupport={
-                  true
-                }
+                  display:
+                    "flex",
 
-                clickEventForward={
-                  true
-                }
+                  alignItems:
+                    "center",
 
-                useMouseEvents={
-                  true
-                }
+                  justifyContent:
+                    "center",
 
-                swipeDistance={
-                  30
-                }
+                  overflow:
+                    "visible",
 
-                onFlip={
-                  handleFlip
-                }
+                  /*
+                   * Keep the page-flip 3D
+                   * transform chain intact.
+                   */
+                  transformStyle:
+                    "preserve-3d",
 
+                }}
               >
 
-                {pages.map(
-                  (
-                    image,
-                    index
-                  ) => (
+                <HTMLFlipBook
 
-                    <div
-                      key={
-                        `page-${index}`
-                      }
+                  ref={
+                    flipBookRef
+                  }
 
-                      style={{
+                  width={
+                    bookSize.width
+                  }
 
-                        width:
-                          "100%",
+                  height={
+                    bookSize.height
+                  }
 
-                        height:
-                          "100%",
+                  /*
+                   * LANDSCAPE / OPEN BOOK
+                   *
+                   * Page 1 = LEFT
+                   * Page 2 = RIGHT
+                   *
+                   * This is important.
+                   */
+                  usePortrait={
+                    false
+                  }
 
-                        background:
-                          "#fff",
+                  size="fixed"
 
-                        overflow:
-                          "hidden",
+                  minWidth={
+                    280
+                  }
 
-                        display:
-                          "flex",
+                  maxWidth={
+                    600
+                  }
 
-                        alignItems:
-                          "center",
+                  minHeight={
+                    390
+                  }
 
-                        justifyContent:
-                          "center",
+                  maxHeight={
+                    800
+                  }
 
-                      }}
-                    >
+                  /*
+                   * Smooth realistic turning.
+                   */
+                  flippingTime={
+                    1050
+                  }
 
-                      <img
-                        src={
-                          image
+                  drawShadow={
+                    true
+                  }
+
+                  maxShadowOpacity={
+                    0.65
+                  }
+
+                  /*
+                   * IMPORTANT:
+                   *
+                   * false allows the first page
+                   * to participate in the normal
+                   * two-page open-book spread.
+                   *
+                   * Page 1 -> left
+                   * Page 2 -> right
+                   */
+                  showCover={
+                    false
+                  }
+
+                  startPage={
+                    0
+                  }
+
+                  autoSize={
+                    false
+                  }
+
+                  mobileScrollSupport={
+                    true
+                  }
+
+                  clickEventForward={
+                    true
+                  }
+
+                  useMouseEvents={
+                    true
+                  }
+
+                  swipeDistance={
+                    25
+                  }
+
+                  showPageCorners={
+                    true
+                  }
+
+                  disableFlipByClick={
+                    false
+                  }
+
+                  onFlip={
+                    handleFlip
+                  }
+
+                  style={{
+                    overflow:
+                      "visible",
+
+                    margin:
+                      "0 auto",
+
+                  }}
+
+                >
+
+                  {pages.map(
+                    (
+                      image,
+                      index
+                    ) => (
+
+                      <Box
+                        key={
+                          `page-${index}`
                         }
 
-                        alt={
-                          `Page ${
-                            index + 1
-                          }`
-                        }
-
-                        draggable={
-                          false
-                        }
-
-                        style={{
-
+                        sx={{
                           width:
                             "100%",
 
                           height:
                             "100%",
 
-                          objectFit:
-                            "contain",
+                          position:
+                            "relative",
+
+                          overflow:
+                            "hidden",
+
+                          background:
+                            "#fff",
 
                           display:
                             "block",
 
-                          userSelect:
-                            "none",
+                          boxSizing:
+                            "border-box",
+
+                          /*
+                           * Prevent the
+                           * bottom/corner
+                           * rendering glitch
+                           * during rotation.
+                           */
+                          backfaceVisibility:
+                            "hidden",
+
+                          WebkitBackfaceVisibility:
+                            "hidden",
+
+                          transformStyle:
+                            "preserve-3d",
+
+                          isolation:
+                            "isolate",
+
+                          boxShadow:
+                            "inset 0 0 18px rgba(0,0,0,.08)",
 
                         }}
+                      >
 
-                      />
+                        <Box
+                          component="img"
 
-                    </div>
+                          src={
+                            image
+                          }
 
-                  )
-                )}
+                          alt={
+                            `Page ${
+                              index + 1
+                            }`
+                          }
 
-              </HTMLFlipBook>
+                          draggable={
+                            false
+                          }
+
+                          sx={{
+                            width:
+                              "100%",
+
+                            height:
+                              "100%",
+
+                            /*
+                             * CONTAIN is important.
+                             *
+                             * Your PDF page will
+                             * remain completely visible.
+                             */
+                            objectFit:
+                              "contain",
+
+                            objectPosition:
+                              "center",
+
+                            display:
+                              "block",
+
+                            userSelect:
+                              "none",
+
+                            pointerEvents:
+                              "none",
+
+                            backfaceVisibility:
+                              "hidden",
+
+                            WebkitBackfaceVisibility:
+                              "hidden",
+
+                          }}
+
+                        />
+
+                      </Box>
+
+                    )
+                  )}
+
+                </HTMLFlipBook>
+
+              </Box>
 
             </Box>
 
@@ -2948,7 +3042,7 @@ const LoginPdf2 = () => {
 
 
         {/* ===============================================
-            EMPTY STATE
+            EMPTY
         =============================================== */}
 
         {!loading &&
@@ -2961,7 +3055,9 @@ const LoginPdf2 = () => {
                   0.7,
               }}
             >
+
               Preparing album...
+
             </Typography>
 
           )}
@@ -2982,7 +3078,7 @@ const LoginPdf2 = () => {
                 "absolute",
 
               bottom:
-                "15px",
+                "18px",
 
               left:
                 "50%",
@@ -3003,19 +3099,22 @@ const LoginPdf2 = () => {
                 "6px 12px",
 
               borderRadius:
-                "30px",
+                "40px",
 
               background:
-                "rgba(0,0,0,.75)",
+                "rgba(0,0,0,.78)",
 
               border:
-                "1px solid rgba(255,255,255,.12)",
+                "1px solid rgba(255,255,255,.15)",
+
+              boxShadow:
+                "0 10px 30px rgba(0,0,0,.5)",
 
               backdropFilter:
-                "blur(10px)",
+                "blur(15px)",
 
               zIndex:
-                30,
+                200,
 
             }}
           >
@@ -3037,6 +3136,13 @@ const LoginPdf2 = () => {
                   sx={{
                     color:
                       "#fff",
+
+                    "&:disabled":
+                      {
+                        color:
+                          "rgba(255,255,255,.2)",
+                      },
+
                   }}
                 >
 
@@ -3052,7 +3158,7 @@ const LoginPdf2 = () => {
             <Typography
               sx={{
                 minWidth:
-                  "90px",
+                  "95px",
 
                 textAlign:
                   "center",
@@ -3060,12 +3166,15 @@ const LoginPdf2 = () => {
                 fontSize:
                   "13px",
 
+                fontWeight:
+                  500,
+
               }}
             >
 
               Page{" "}
-              {currentPage + 1}{" "}
-              /{" "}
+              {currentPage + 1}
+              {" / "}
               {totalPages}
 
             </Typography>
@@ -3088,6 +3197,13 @@ const LoginPdf2 = () => {
                   sx={{
                     color:
                       "#fff",
+
+                    "&:disabled":
+                      {
+                        color:
+                          "rgba(255,255,255,.2)",
+                      },
+
                   }}
                 >
 
