@@ -23,7 +23,6 @@ import {
   Fullscreen,
   FullscreenExit,
   Download,
-  Refresh,
   ArrowBack,
 } from "@mui/icons-material";
 
@@ -68,7 +67,8 @@ const LoginPdf2 = () => {
      ALBUM STATE
   ======================================================= */
 
-  const [albums, setAlbums] = useState([]);
+  const [albums, setAlbums] =
+    useState([]);
 
   const [selectedPDF, setSelectedPDF] =
     useState("");
@@ -110,6 +110,9 @@ const LoginPdf2 = () => {
   const [retryKey, setRetryKey] =
     useState(0);
 
+  const [pdfReloadKey, setPdfReloadKey] =
+    useState(0);
+
 
   /* =======================================================
      ZOOM
@@ -140,14 +143,40 @@ const LoginPdf2 = () => {
   const abortControllerRef =
     useRef(null);
 
-  const pdfBlobCacheRef =
+  /*
+   * IMPORTANT:
+   *
+   * Store ArrayBuffer instead of Uint8Array.
+   *
+   * PDF.js can transfer/detach Uint8Array buffers.
+   * We create a fresh copy every time PDF.js needs it.
+   */
+  const pdfBufferCacheRef =
     useRef(new Map());
 
-  const pdfBytesCacheRef =
+  const pdfBlobCacheRef =
     useRef(new Map());
 
   const renderedPageCacheRef =
     useRef(new Map());
+
+  /*
+   * Current PDF.js loading task.
+   */
+  const pdfLoadingTaskRef =
+    useRef(null);
+
+  /*
+   * Current loaded PDF.js document.
+   */
+  const pdfDocumentRef =
+    useRef(null);
+
+  /*
+   * Current page render task.
+   */
+  const renderTaskRef =
+    useRef(null);
 
 
   /* =======================================================
@@ -175,9 +204,11 @@ const LoginPdf2 = () => {
           );
 
         if (!response.ok) {
+
           throw new Error(
             `Album API Error: ${response.status}`
           );
+
         }
 
         const data =
@@ -203,20 +234,28 @@ const LoginPdf2 = () => {
                       .trim()
                       .toLowerCase()
                   );
+
                 })
                 .map((item) => ({
+
                   heading:
-                    item?.heading2 || "Digital Album",
+                    item?.heading2 ||
+                    "Digital Album",
 
                   pdf:
-                    item?.pdf2 || "",
+                    item?.pdf2 ||
+                    "",
+
                 }))
                 .filter(
-                  (item) => item.pdf
+                  (item) =>
+                    item.pdf
                 )
             : [];
 
-        setAlbums(userAlbums);
+        setAlbums(
+          userAlbums
+        );
 
       } catch (err) {
 
@@ -239,6 +278,8 @@ const LoginPdf2 = () => {
 
           setLoading(false);
 
+          setLoadingText("");
+
         }
 
       }
@@ -248,399 +289,506 @@ const LoginPdf2 = () => {
     loadAlbums();
 
     return () => {
+
       cancelled = true;
+
     };
 
-  }, [username, retryKey]);
+  }, [
+    username,
+    retryKey,
+  ]);
 
 
   /* =======================================================
      SELECT ALBUM
   ======================================================= */
 
-  const selectAlbum = useCallback(
-    (album) => {
+  const selectAlbum =
+    useCallback(
+      (album) => {
 
-      if (!album?.pdf) return;
+        if (!album?.pdf) return;
 
-      setSelectedPDF(album.pdf);
-      setSelectedHeading(
-        album.heading || "Digital Album"
-      );
+        /*
+         * Cancel current PDF work immediately.
+         */
+        try {
 
-      setPdf(null);
-      setPages([]);
-      setTotalPages(0);
-      setCurrentPage(0);
-      setZoom(1);
-      setError("");
+          if (
+            renderTaskRef.current
+          ) {
 
-    },
-    []
-  );
+            renderTaskRef.current.cancel();
+
+          }
+
+        } catch (_) {}
+
+        try {
+
+          if (
+            pdfLoadingTaskRef.current
+          ) {
+
+            pdfLoadingTaskRef.current.destroy();
+
+          }
+
+        } catch (_) {}
+
+        try {
+
+          if (
+            pdfDocumentRef.current
+          ) {
+
+            pdfDocumentRef.current.destroy();
+
+          }
+
+        } catch (_) {}
+
+        renderTaskRef.current = null;
+        pdfLoadingTaskRef.current = null;
+        pdfDocumentRef.current = null;
+
+        setSelectedPDF(
+          album.pdf
+        );
+
+        setSelectedHeading(
+          album.heading ||
+            "Digital Album"
+        );
+
+        setPdf(null);
+
+        setPages([]);
+
+        setTotalPages(0);
+
+        setCurrentPage(0);
+
+        setZoom(1);
+
+        setError("");
+
+        setLoading(true);
+
+        setLoadingText(
+          "Preparing digital album..."
+        );
+
+      },
+      []
+    );
 
 
   /* =======================================================
      DOWNLOAD PDF FROM RENDER
   ======================================================= */
 
-  const downloadPDF = useCallback(
-    async (albumKey) => {
+  const downloadPDF =
+    useCallback(
+      async (albumKey) => {
 
-      if (!albumKey) {
-        throw new Error(
-          "PDF link is missing."
-        );
-      }
+        if (!albumKey) {
+
+          throw new Error(
+            "PDF link is missing."
+          );
+
+        }
 
 
-      /* ---------------------------------------------------
-         CACHE CHECK
-      --------------------------------------------------- */
+        /* =================================================
+           CACHE CHECK
+        ================================================= */
 
-      if (
-        pdfBytesCacheRef.current.has(
-          albumKey
-        )
-      ) {
+        if (
+          pdfBufferCacheRef.current.has(
+            albumKey
+          )
+        ) {
+
+          console.log(
+            "PDF found in ArrayBuffer cache."
+          );
+
+          const cachedBuffer =
+            pdfBufferCacheRef.current.get(
+              albumKey
+            );
+
+          /*
+           * VERY IMPORTANT
+           *
+           * Never give the cached buffer directly
+           * to PDF.js.
+           *
+           * Create a completely new ArrayBuffer.
+           */
+          const freshBuffer =
+            cachedBuffer.slice(0);
+
+          const freshBytes =
+            new Uint8Array(
+              freshBuffer
+            );
+
+          return {
+
+            bytes:
+              freshBytes,
+
+            blob:
+              pdfBlobCacheRef.current.get(
+                albumKey
+              ),
+
+          };
+
+        }
+
+
+        /* =================================================
+           ABORT PREVIOUS REQUEST
+        ================================================= */
+
+        if (
+          abortControllerRef.current
+        ) {
+
+          try {
+
+            abortControllerRef.current.abort();
+
+          } catch (_) {}
+
+        }
+
+
+        const controller =
+          new AbortController();
+
+        abortControllerRef.current =
+          controller;
+
+
+        /* =================================================
+           PROXY URL
+        ================================================= */
+
+        const proxyUrl =
+          `${PDF_PROXY}?url=${encodeURIComponent(
+            albumKey
+          )}`;
+
 
         console.log(
-          "PDF found in byte cache."
+          "================================="
         );
 
-        return {
-          bytes:
-            pdfBytesCacheRef.current.get(
-              albumKey
-            ),
+        console.log(
+          "Downloading PDF..."
+        );
 
-          blob:
-            pdfBlobCacheRef.current.get(
-              albumKey
-            ),
-        };
-
-      }
-
-
-      /* ---------------------------------------------------
-         ABORT PREVIOUS REQUEST
-      --------------------------------------------------- */
-
-      if (
-        abortControllerRef.current
-      ) {
-
-        abortControllerRef.current.abort();
-
-      }
-
-      const controller =
-        new AbortController();
-
-      abortControllerRef.current =
-        controller;
-
-
-      /* ---------------------------------------------------
-         PROXY URL
-      --------------------------------------------------- */
-
-      const proxyUrl =
-        `${PDF_PROXY}?url=${encodeURIComponent(
+        console.log(
+          "My Cloud Share URL:",
           albumKey
-        )}`;
+        );
 
+        console.log(
+          "Render PDF Proxy:",
+          PDF_PROXY
+        );
 
-      console.log(
-        "================================="
-      );
+        console.log(
+          "PDF Proxy URL:",
+          proxyUrl
+        );
 
-      console.log(
-        "Downloading PDF..."
-      );
-
-      console.log(
-        "My Cloud Share URL:",
-        albumKey
-      );
-
-      console.log(
-        "Render PDF Proxy:",
-        PDF_PROXY
-      );
-
-      console.log(
-        "PDF Proxy URL:",
-        proxyUrl
-      );
-
-      console.log(
-        "================================="
-      );
-
-
-      setLoadingText(
-        "Connecting to PDF server..."
-      );
-
-
-      /* ---------------------------------------------------
-         FETCH PDF
-      --------------------------------------------------- */
-
-      const response =
-        await fetch(
-          proxyUrl,
-          {
-            method: "GET",
-
-            signal:
-              controller.signal,
-
-            cache: "no-store",
-
-            headers: {
-              Accept:
-                "application/pdf",
-            },
-          }
+        console.log(
+          "================================="
         );
 
 
-      console.log(
-        "PDF HTTP Status:",
-        response.status
-      );
-
-
-      /* ---------------------------------------------------
-         HTTP ERROR
-      --------------------------------------------------- */
-
-      if (!response.ok) {
-
-        let serverMessage = "";
-
-        try {
-
-          const text =
-            await response.text();
-
-          serverMessage =
-            text.substring(0, 500);
-
-        } catch (_) {}
-
-        throw new Error(
-          `PDF Server Error: ${response.status}${
-            serverMessage
-              ? ` - ${serverMessage}`
-              : ""
-          }`
+        setLoadingText(
+          "Connecting to PDF server..."
         );
 
-      }
+
+        /* =================================================
+           FETCH PDF
+        ================================================= */
+
+        const response =
+          await fetch(
+            proxyUrl,
+            {
+              method:
+                "GET",
+
+              signal:
+                controller.signal,
+
+              cache:
+                "no-store",
+
+              headers: {
+
+                Accept:
+                  "application/pdf",
+
+              },
+
+            }
+          );
 
 
-      /* ---------------------------------------------------
-         CONTENT TYPE
-      --------------------------------------------------- */
-
-      const contentType =
-        response.headers.get(
-          "content-type"
-        ) || "";
-
-      console.log(
-        "PDF Content-Type:",
-        contentType
-      );
-
-
-      if (
-        !contentType
-          .toLowerCase()
-          .includes("application/pdf")
-      ) {
-
-        throw new Error(
-          `Invalid PDF response. Content-Type: ${contentType}`
+        console.log(
+          "PDF HTTP Status:",
+          response.status
         );
 
-      }
+
+        /* =================================================
+           HTTP ERROR
+        ================================================= */
+
+        if (!response.ok) {
+
+          let serverMessage = "";
+
+          try {
+
+            const text =
+              await response.text();
+
+            serverMessage =
+              text.substring(
+                0,
+                500
+              );
+
+          } catch (_) {}
 
 
-      /* ---------------------------------------------------
-         CONTENT LENGTH
-      --------------------------------------------------- */
+          throw new Error(
+            `PDF Server Error: ${response.status}${
+              serverMessage
+                ? ` - ${serverMessage}`
+                : ""
+            }`
+          );
 
-      console.log(
-        "PDF Content-Length:",
-        response.headers.get(
-          "content-length"
-        )
-      );
-
-
-      console.log(
-        "PDF Transfer-Encoding:",
-        response.headers.get(
-          "transfer-encoding"
-        )
-      );
+        }
 
 
-      setLoadingText(
-        "Downloading PDF..."
-      );
+        /* =================================================
+           CONTENT TYPE
+        ================================================= */
+
+        const contentType =
+          response.headers.get(
+            "content-type"
+          ) || "";
 
 
-      /* ===================================================
-         IMPORTANT FIX
-         
-         Read response ONCE.
-         Do NOT do:
-         
-         response.arrayBuffer()
-         -> Blob
-         -> blob.arrayBuffer()
-         
-         because this can create unnecessary
-         memory copies for an 80 MB PDF.
-      =================================================== */
-
-      const arrayBuffer =
-        await response.arrayBuffer();
-
-
-      console.log(
-        "PDF ArrayBuffer bytes:",
-        arrayBuffer.byteLength
-      );
-
-
-      /* ---------------------------------------------------
-         EMPTY PDF CHECK
-      --------------------------------------------------- */
-
-      if (
-        !arrayBuffer ||
-        arrayBuffer.byteLength === 0
-      ) {
-
-        throw new Error(
-          "Empty PDF received from PDF server."
+        console.log(
+          "PDF Content-Type:",
+          contentType
         );
 
-      }
+
+        if (
+          !contentType
+            .toLowerCase()
+            .includes(
+              "application/pdf"
+            )
+        ) {
+
+          throw new Error(
+            `Invalid PDF response. Content-Type: ${contentType}`
+          );
+
+        }
 
 
-      /* ---------------------------------------------------
-         SIZE
-      --------------------------------------------------- */
+        /* =================================================
+           CONTENT LENGTH
+        ================================================= */
 
-      const sizeMB =
-        (
-          arrayBuffer.byteLength /
-          1024 /
-          1024
-        ).toFixed(2);
-
-
-      console.log(
-        `PDF received: ${sizeMB} MB`
-      );
-
-
-      /* ---------------------------------------------------
-         BASIC PDF HEADER CHECK
-      --------------------------------------------------- */
-
-      const headerBytes =
-        new Uint8Array(
-          arrayBuffer.slice(
-            0,
-            5
+        console.log(
+          "PDF Content-Length:",
+          response.headers.get(
+            "content-length"
           )
         );
 
-      const header =
-        String.fromCharCode(
-          ...headerBytes
+        console.log(
+          "PDF Transfer-Encoding:",
+          response.headers.get(
+            "transfer-encoding"
+          )
         );
 
 
-      console.log(
-        "PDF Header:",
-        header
-      );
-
-
-      if (
-        header !== "%PDF-"
-      ) {
-
-        throw new Error(
-          "The server response is not a valid PDF file."
+        setLoadingText(
+          "Downloading PDF..."
         );
 
-      }
+
+        /* =================================================
+           READ RESPONSE ONCE
+        ================================================= */
+
+        const arrayBuffer =
+          await response.arrayBuffer();
 
 
-      /* ---------------------------------------------------
-         CREATE BYTES
-      --------------------------------------------------- */
+        console.log(
+          "PDF ArrayBuffer bytes:",
+          arrayBuffer.byteLength
+        );
 
-      const pdfBytes =
-        new Uint8Array(
+
+        /* =================================================
+           EMPTY PDF CHECK
+        ================================================= */
+
+        if (
+          !arrayBuffer ||
+          arrayBuffer.byteLength === 0
+        ) {
+
+          throw new Error(
+            "Empty PDF received from PDF server."
+          );
+
+        }
+
+
+        /* =================================================
+           SIZE
+        ================================================= */
+
+        const sizeMB =
+          (
+            arrayBuffer.byteLength /
+            1024 /
+            1024
+          ).toFixed(2);
+
+
+        console.log(
+          `PDF received: ${sizeMB} MB`
+        );
+
+
+        /* =================================================
+           BASIC PDF HEADER CHECK
+        ================================================= */
+
+        const headerBytes =
+          new Uint8Array(
+            arrayBuffer.slice(
+              0,
+              5
+            )
+          );
+
+
+        const header =
+          String.fromCharCode(
+            ...headerBytes
+          );
+
+
+        console.log(
+          "PDF Header:",
+          header
+        );
+
+
+        if (
+          header !==
+          "%PDF-"
+        ) {
+
+          throw new Error(
+            "The server response is not a valid PDF file."
+          );
+
+        }
+
+
+        /* =================================================
+           CACHE ORIGINAL ARRAYBUFFER
+        ================================================= */
+
+        /*
+         * We store the ORIGINAL ArrayBuffer.
+         *
+         * PDF.js will never receive this exact buffer.
+         */
+        pdfBufferCacheRef.current.set(
+          albumKey,
           arrayBuffer
         );
 
 
-      /* ---------------------------------------------------
-         CACHE BYTES
-      --------------------------------------------------- */
+        /* =================================================
+           CREATE BLOB
+        ================================================= */
 
-      pdfBytesCacheRef.current.set(
-        albumKey,
-        pdfBytes
-      );
+        const blob =
+          new Blob(
+            [arrayBuffer],
+            {
+              type:
+                "application/pdf",
+            }
+          );
 
 
-      /* ---------------------------------------------------
-         CREATE BLOB ONLY ONCE
-      --------------------------------------------------- */
-
-      const blob =
-        new Blob(
-          [arrayBuffer],
-          {
-            type:
-              "application/pdf",
-          }
+        pdfBlobCacheRef.current.set(
+          albumKey,
+          blob
         );
 
 
-      pdfBlobCacheRef.current.set(
-        albumKey,
-        blob
-      );
+        console.log(
+          `PDF downloaded successfully: ${sizeMB} MB`
+        );
 
 
-      console.log(
-        `Sending PDF to PDF.js: ${sizeMB} MB`
-      );
+        /*
+         * Create a fresh copy for this PDF.js load.
+         */
+        const freshBuffer =
+          arrayBuffer.slice(0);
+
+        const freshBytes =
+          new Uint8Array(
+            freshBuffer
+          );
 
 
-      return {
-        bytes: pdfBytes,
-        blob,
-      };
+        return {
 
-    },
-    []
-  );
+          bytes:
+            freshBytes,
+
+          blob,
+
+        };
+
+      },
+      []
+    );
 
 
   /* =======================================================
@@ -654,348 +802,629 @@ const LoginPdf2 = () => {
 
     let cancelled = false;
 
-    const loadPDF = async () => {
+    let currentLoadingTask = null;
 
-      try {
+    let currentLoadedPdf = null;
 
-        setLoading(true);
-
-        setLoadingText(
-          "Preparing digital album..."
-        );
-
-        setError("");
-
-        setPages([]);
-
-        setPdf(null);
-
-        setTotalPages(0);
-
-        setCurrentPage(0);
+    let currentRenderTask = null;
 
 
-        /* -------------------------------------------------
-           DOWNLOAD
-        ------------------------------------------------- */
+    const cleanupPDF =
+      async () => {
 
-        const result =
-          await downloadPDF(
-            selectedPDF
-          );
+        /*
+         * Cancel canvas rendering.
+         */
+        try {
 
+          if (
+            currentRenderTask
+          ) {
 
-        if (cancelled) return;
+            currentRenderTask.cancel();
 
-
-        const pdfBytes =
-          result.bytes;
-
-
-        /* -------------------------------------------------
-           PDF.JS
-        ------------------------------------------------- */
-
-        setLoadingText(
-          "Opening digital album..."
-        );
-
-
-        console.log(
-          "Loading PDF with PDF.js..."
-        );
-
-
-        const loadingTask =
-          pdfjsLib.getDocument({
-            data: pdfBytes,
-          });
-
-
-        const loadedPdf =
-          await loadingTask.promise;
-
-
-        if (cancelled) {
-
-          try {
-            await loadedPdf.destroy();
-          } catch (_) {}
-
-          return;
-
-        }
-
-
-        console.log(
-          "PDF loaded successfully."
-        );
-
-        console.log(
-          "Total pages:",
-          loadedPdf.numPages
-        );
-
-
-        setPdf(
-          loadedPdf
-        );
-
-        setTotalPages(
-          loadedPdf.numPages
-        );
-
-
-        /* -------------------------------------------------
-           RENDER PAGES
-        ------------------------------------------------- */
-
-        const renderedPages = [];
-
-
-        for (
-          let pageNumber = 1;
-          pageNumber <=
-          loadedPdf.numPages;
-          pageNumber++
-        ) {
-
-          if (cancelled) {
-            break;
           }
 
+        } catch (_) {}
+
+
+        try {
+
+          if (
+            renderTaskRef.current
+          ) {
+
+            renderTaskRef.current.cancel();
+
+          }
+
+        } catch (_) {}
+
+
+        /*
+         * Destroy PDF.js loading task.
+         */
+        try {
+
+          if (
+            currentLoadingTask
+          ) {
+
+            await currentLoadingTask.destroy();
+
+          }
+
+        } catch (_) {}
+
+
+        try {
+
+          if (
+            pdfLoadingTaskRef.current
+          ) {
+
+            await pdfLoadingTaskRef.current.destroy();
+
+          }
+
+        } catch (_) {}
+
+
+        /*
+         * Destroy loaded PDF document.
+         */
+        try {
+
+          if (
+            currentLoadedPdf
+          ) {
+
+            await currentLoadedPdf.destroy();
+
+          }
+
+        } catch (_) {}
+
+
+        try {
+
+          if (
+            pdfDocumentRef.current
+          ) {
+
+            await pdfDocumentRef.current.destroy();
+
+          }
+
+        } catch (_) {}
+
+
+        currentLoadingTask = null;
+
+        currentLoadedPdf = null;
+
+        currentRenderTask = null;
+
+        pdfLoadingTaskRef.current = null;
+
+        pdfDocumentRef.current = null;
+
+        renderTaskRef.current = null;
+
+      };
+
+
+    const loadPDF =
+      async () => {
+
+        try {
+
+          setLoading(true);
 
           setLoadingText(
-            `Preparing page ${pageNumber} of ${loadedPdf.numPages}...`
+            "Preparing digital album..."
           );
 
+          setError("");
 
-          const cacheKey =
-            `${selectedPDF}__${pageNumber}__${zoom}`;
+          setPages([]);
 
+          setPdf(null);
 
-          if (
-            renderedPageCacheRef.current.has(
-              cacheKey
-            )
-          ) {
-
-            renderedPages.push(
-              renderedPageCacheRef.current.get(
-                cacheKey
-              )
-            );
-
-            continue;
-
-          }
-
-
-          const page =
-            await loadedPdf.getPage(
-              pageNumber
-            );
-
-
-          /* ---------------------------------------------
-             SCALE
-          --------------------------------------------- */
-
-          const baseScale =
-            1.25 * zoom;
-
-
-          const viewport =
-            page.getViewport({
-              scale: baseScale,
-            });
-
-
-          const dpr =
-            Math.min(
-              window.devicePixelRatio ||
-                1,
-              1.5
-            );
-
-
-          const canvas =
-            document.createElement(
-              "canvas"
-            );
-
-
-          const context =
-            canvas.getContext(
-              "2d",
-              {
-                alpha: false,
-              }
-            );
-
-
-          canvas.width =
-            Math.floor(
-              viewport.width * dpr
-            );
-
-          canvas.height =
-            Math.floor(
-              viewport.height * dpr
-            );
-
-
-          canvas.style.width =
-            `${viewport.width}px`;
-
-          canvas.style.height =
-            `${viewport.height}px`;
-
-
-          await page.render({
-            canvasContext:
-              context,
-
-            viewport,
-
-            transform:
-              dpr !== 1
-                ? [
-                    dpr,
-                    0,
-                    0,
-                    dpr,
-                    0,
-                    0,
-                  ]
-                : null,
-          }).promise;
-
-
-          /* ---------------------------------------------
-             JPEG PAGE IMAGE
-          --------------------------------------------- */
-
-          const image =
-            canvas.toDataURL(
-              "image/jpeg",
-              0.82
-            );
-
-
-          renderedPageCacheRef.current.set(
-            cacheKey,
-            image
-          );
-
-
-          renderedPages.push(
-            image
-          );
-
-
-          /* ---------------------------------------------
-             RELEASE CANVAS
-          --------------------------------------------- */
-
-          canvas.width = 1;
-          canvas.height = 1;
-
-
-          /* ---------------------------------------------
-             ALLOW BROWSER TO BREATHE
-          --------------------------------------------- */
-
-          if (
-            pageNumber % 2 === 0
-          ) {
-
-            await new Promise(
-              (resolve) =>
-                setTimeout(
-                  resolve,
-                  10
-                )
-            );
-
-          }
-
-        }
-
-
-        if (!cancelled) {
-
-          setPages(
-            renderedPages
-          );
+          setTotalPages(0);
 
           setCurrentPage(0);
 
-          setLoading(false);
 
-          setLoadingText("");
+          /* =============================================
+             DOWNLOAD
+          ============================================= */
 
-        }
-
-      } catch (err) {
-
-        if (
-          err?.name ===
-          "AbortError"
-        ) {
-
-          return;
-
-        }
+          const result =
+            await downloadPDF(
+              selectedPDF
+            );
 
 
-        console.error(
-          "================================="
-        );
+          if (cancelled) {
 
-        console.error(
-          "PDF ERROR"
-        );
+            return;
 
-        console.error(
-          err
-        );
-
-        console.error(
-          "================================="
-        );
+          }
 
 
-        if (!cancelled) {
+          /*
+           * IMPORTANT:
+           *
+           * result.bytes is already a fresh Uint8Array.
+           *
+           * Make one MORE copy before giving it
+           * to PDF.js.
+           *
+           * This guarantees that no cached buffer
+           * can ever be detached.
+           */
+          const sourceBytes =
+            result.bytes;
 
-          setError(
-            err?.message ||
-              "Unable to open PDF."
+
+          const pdfBytes =
+            new Uint8Array(
+              sourceBytes
+            );
+
+
+          /* =============================================
+             PDF.JS
+          ============================================= */
+
+          setLoadingText(
+            "Opening digital album..."
           );
 
-          setLoading(false);
 
-          setLoadingText("");
+          console.log(
+            "Loading PDF with PDF.js..."
+          );
+
+
+          console.log(
+            "PDF.js bytes:",
+            pdfBytes.byteLength
+          );
+
+
+          currentLoadingTask =
+            pdfjsLib.getDocument({
+
+              data:
+                pdfBytes,
+
+            });
+
+
+          pdfLoadingTaskRef.current =
+            currentLoadingTask;
+
+
+          const loadedPdf =
+            await currentLoadingTask.promise;
+
+
+          currentLoadedPdf =
+            loadedPdf;
+
+          pdfDocumentRef.current =
+            loadedPdf;
+
+
+          if (cancelled) {
+
+            await cleanupPDF();
+
+            return;
+
+          }
+
+
+          console.log(
+            "PDF loaded successfully."
+          );
+
+          console.log(
+            "Total pages:",
+            loadedPdf.numPages
+          );
+
+
+          setPdf(
+            loadedPdf
+          );
+
+          setTotalPages(
+            loadedPdf.numPages
+          );
+
+
+          /* =============================================
+             RENDER PAGES
+          ============================================= */
+
+          const renderedPages =
+            [];
+
+
+          for (
+            let pageNumber = 1;
+            pageNumber <=
+            loadedPdf.numPages;
+            pageNumber++
+          ) {
+
+            if (cancelled) {
+
+              break;
+
+            }
+
+
+            setLoadingText(
+              `Preparing page ${pageNumber} of ${loadedPdf.numPages}...`
+            );
+
+
+            const cacheKey =
+              `${selectedPDF}__${pageNumber}__${zoom}`;
+
+
+            if (
+              renderedPageCacheRef.current.has(
+                cacheKey
+              )
+            ) {
+
+              renderedPages.push(
+                renderedPageCacheRef.current.get(
+                  cacheKey
+                )
+              );
+
+              continue;
+
+            }
+
+
+            const page =
+              await loadedPdf.getPage(
+                pageNumber
+              );
+
+
+            if (cancelled) {
+
+              try {
+
+                page.cleanup();
+
+              } catch (_) {}
+
+              break;
+
+            }
+
+
+            /* =========================================
+               SCALE
+            ========================================= */
+
+            const baseScale =
+              1.25 * zoom;
+
+
+            const viewport =
+              page.getViewport({
+                scale:
+                  baseScale,
+              });
+
+
+            const dpr =
+              Math.min(
+                window.devicePixelRatio ||
+                  1,
+                1.5
+              );
+
+
+            const canvas =
+              document.createElement(
+                "canvas"
+              );
+
+
+            const context =
+              canvas.getContext(
+                "2d",
+                {
+                  alpha:
+                    false,
+                }
+              );
+
+
+            canvas.width =
+              Math.floor(
+                viewport.width *
+                  dpr
+              );
+
+
+            canvas.height =
+              Math.floor(
+                viewport.height *
+                  dpr
+              );
+
+
+            canvas.style.width =
+              `${viewport.width}px`;
+
+            canvas.style.height =
+              `${viewport.height}px`;
+
+
+            /* =========================================
+               RENDER
+            ========================================= */
+
+            currentRenderTask =
+              page.render({
+
+                canvasContext:
+                  context,
+
+                viewport,
+
+                transform:
+                  dpr !== 1
+                    ? [
+                        dpr,
+                        0,
+                        0,
+                        dpr,
+                        0,
+                        0,
+                      ]
+                    : null,
+
+              });
+
+
+            renderTaskRef.current =
+              currentRenderTask;
+
+
+            await currentRenderTask.promise;
+
+
+            if (cancelled) {
+
+              try {
+
+                currentRenderTask.cancel();
+
+              } catch (_) {}
+
+              try {
+
+                page.cleanup();
+
+              } catch (_) {}
+
+              canvas.width = 1;
+              canvas.height = 1;
+
+              break;
+
+            }
+
+
+            /* =========================================
+               JPEG PAGE IMAGE
+            ========================================= */
+
+            const image =
+              canvas.toDataURL(
+                "image/jpeg",
+                0.82
+              );
+
+
+            renderedPageCacheRef.current.set(
+              cacheKey,
+              image
+            );
+
+
+            renderedPages.push(
+              image
+            );
+
+
+            /* =========================================
+               RELEASE CANVAS
+            ========================================= */
+
+            canvas.width = 1;
+            canvas.height = 1;
+
+
+            try {
+
+              page.cleanup();
+
+            } catch (_) {}
+
+
+            currentRenderTask =
+              null;
+
+            renderTaskRef.current =
+              null;
+
+
+            /* =========================================
+               ALLOW BROWSER TO BREATHE
+            ========================================= */
+
+            if (
+              pageNumber % 2 === 0
+            ) {
+
+              await new Promise(
+                (resolve) =>
+                  setTimeout(
+                    resolve,
+                    10
+                  )
+              );
+
+            }
+
+          }
+
+
+          if (!cancelled) {
+
+            setPages(
+              renderedPages
+            );
+
+            setCurrentPage(
+              0
+            );
+
+            setLoading(
+              false
+            );
+
+            setLoadingText(
+              ""
+            );
+
+          }
+
+        } catch (err) {
+
+          if (
+            cancelled
+          ) {
+
+            return;
+
+          }
+
+
+          if (
+            err?.name ===
+            "AbortError"
+          ) {
+
+            return;
+
+          }
+
+
+          /*
+           * PDF.js can throw this when a render task
+           * is cancelled during album switching.
+           *
+           * Do not show it as a real error.
+           */
+          if (
+            err?.name ===
+            "RenderingCancelledException"
+          ) {
+
+            return;
+
+          }
+
+
+          console.error(
+            "================================="
+          );
+
+          console.error(
+            "PDF ERROR"
+          );
+
+          console.error(
+            err
+          );
+
+          console.error(
+            "================================="
+          );
+
+
+          if (!cancelled) {
+
+            setError(
+              err?.message ||
+                "Unable to open PDF."
+            );
+
+            setLoading(
+              false
+            );
+
+            setLoadingText(
+              ""
+            );
+
+          }
 
         }
 
-      }
-
-    };
+      };
 
 
     loadPDF();
 
 
+    /*
+     * Cleanup when:
+     *
+     * - another PDF is selected
+     * - component unmounts
+     * - retry occurs
+     */
     return () => {
 
       cancelled = true;
+
+      try {
+
+        if (
+          abortControllerRef.current
+        ) {
+
+          abortControllerRef.current.abort();
+
+        }
+
+      } catch (_) {}
+
+
+      void cleanupPDF();
 
     };
 
   }, [
     selectedPDF,
     downloadPDF,
+    pdfReloadKey,
   ]);
 
 
@@ -1027,7 +1456,8 @@ const LoginPdf2 = () => {
     useCallback(() => {
 
       const book =
-        flipBookRef.current?.pageFlip?.();
+        flipBookRef.current
+          ?.pageFlip?.();
 
       if (!book) return;
 
@@ -1048,7 +1478,8 @@ const LoginPdf2 = () => {
     useCallback(() => {
 
       const book =
-        flipBookRef.current?.pageFlip?.();
+        flipBookRef.current
+          ?.pageFlip?.();
 
       if (!book) return;
 
@@ -1074,7 +1505,8 @@ const LoginPdf2 = () => {
             2,
             Number(
               (
-                value + 0.1
+                value +
+                0.1
               ).toFixed(1)
             )
           )
@@ -1096,7 +1528,8 @@ const LoginPdf2 = () => {
             0.7,
             Number(
               (
-                value - 0.1
+                value -
+                0.1
               ).toFixed(1)
             )
           )
@@ -1110,36 +1543,44 @@ const LoginPdf2 = () => {
   ======================================================= */
 
   const toggleFullscreen =
-    useCallback(async () => {
+    useCallback(
+      async () => {
 
-      try {
+        try {
 
-        if (
-          !document.fullscreenElement
-        ) {
+          if (
+            !document.fullscreenElement
+          ) {
 
-          await containerRef.current?.requestFullscreen();
+            await containerRef.current
+              ?.requestFullscreen();
 
-          setIsFullscreen(true);
+            setIsFullscreen(
+              true
+            );
 
-        } else {
+          } else {
 
-          await document.exitFullscreen();
+            await document.exitFullscreen();
 
-          setIsFullscreen(false);
+            setIsFullscreen(
+              false
+            );
+
+          }
+
+        } catch (err) {
+
+          console.error(
+            "Fullscreen error:",
+            err
+          );
 
         }
 
-      } catch (err) {
-
-        console.error(
-          "Fullscreen error:",
-          err
-        );
-
-      }
-
-    }, []);
+      },
+      []
+    );
 
 
   /* =======================================================
@@ -1183,98 +1624,109 @@ const LoginPdf2 = () => {
   ======================================================= */
 
   const handleDownload =
-    useCallback(async () => {
+    useCallback(
+      async () => {
 
-      try {
+        try {
 
-        if (!selectedPDF) return;
-
-
-        let blob =
-          pdfBlobCacheRef.current.get(
-            selectedPDF
-          );
+          if (!selectedPDF) return;
 
 
-        if (!blob) {
-
-          const result =
-            await downloadPDF(
+          let blob =
+            pdfBlobCacheRef.current.get(
               selectedPDF
             );
 
-          blob =
-            result.blob;
 
-        }
+          if (!blob) {
 
+            const result =
+              await downloadPDF(
+                selectedPDF
+              );
 
-        if (!blob) {
+            blob =
+              result.blob;
 
-          throw new Error(
-            "PDF file is not available."
-          );
-
-        }
-
-
-        const url =
-          URL.createObjectURL(
-            blob
-          );
+          }
 
 
-        const link =
-          document.createElement(
-            "a"
-          );
+          if (!blob) {
 
-        link.href = url;
-
-        link.download =
-          `${
-            selectedHeading ||
-            "Digital Album"
-          }.pdf`;
-
-
-        document.body.appendChild(
-          link
-        );
-
-        link.click();
-
-        link.remove();
-
-
-        setTimeout(
-          () => {
-            URL.revokeObjectURL(
-              url
+            throw new Error(
+              "PDF file is not available."
             );
-          },
-          1000
-        );
 
-      } catch (err) {
+          }
 
-        console.error(
-          "Download error:",
-          err
-        );
 
-        setError(
-          err?.message ||
-            "Unable to download PDF."
-        );
+          const url =
+            URL.createObjectURL(
+              blob
+            );
 
-      }
 
-    }, [
-      selectedPDF,
-      selectedHeading,
-      downloadPDF,
-    ]);
+          const link =
+            document.createElement(
+              "a"
+            );
+
+
+          link.href =
+            url;
+
+
+          link.download =
+            `${
+              selectedHeading ||
+              "Digital Album"
+            }.pdf`;
+
+
+          document.body.appendChild(
+            link
+          );
+
+
+          link.click();
+
+
+          link.remove();
+
+
+          setTimeout(
+            () => {
+
+              URL.revokeObjectURL(
+                url
+              );
+
+            },
+            1000
+          );
+
+
+        } catch (err) {
+
+          console.error(
+            "Download error:",
+            err
+          );
+
+          setError(
+            err?.message ||
+              "Unable to download PDF."
+          );
+
+        }
+
+      },
+      [
+        selectedPDF,
+        selectedHeading,
+        downloadPDF,
+      ]
+    );
 
 
   /* =======================================================
@@ -1286,10 +1738,122 @@ const LoginPdf2 = () => {
 
       setError("");
 
-      setRetryKey(
+      /*
+       * If we are on album list, reload album API.
+       */
+      if (!selectedPDF) {
+
+        setRetryKey(
+          (value) =>
+            value + 1
+        );
+
+        return;
+
+      }
+
+
+      /*
+       * If a PDF is currently selected,
+       * force the PDF loading effect to run again.
+       */
+      setPdfReloadKey(
         (value) =>
           value + 1
       );
+
+    }, [
+      selectedPDF,
+    ]);
+
+
+  /* =======================================================
+     BACK TO ALBUM LIST
+  ======================================================= */
+
+  const backToAlbums =
+    useCallback(() => {
+
+      try {
+
+        if (
+          abortControllerRef.current
+        ) {
+
+          abortControllerRef.current.abort();
+
+        }
+
+      } catch (_) {}
+
+
+      try {
+
+        if (
+          renderTaskRef.current
+        ) {
+
+          renderTaskRef.current.cancel();
+
+        }
+
+      } catch (_) {}
+
+
+      try {
+
+        if (
+          pdfLoadingTaskRef.current
+        ) {
+
+          pdfLoadingTaskRef.current.destroy();
+
+        }
+
+      } catch (_) {}
+
+
+      try {
+
+        if (
+          pdfDocumentRef.current
+        ) {
+
+          pdfDocumentRef.current.destroy();
+
+        }
+
+      } catch (_) {}
+
+
+      renderTaskRef.current =
+        null;
+
+      pdfLoadingTaskRef.current =
+        null;
+
+      pdfDocumentRef.current =
+        null;
+
+      setSelectedPDF("");
+
+      setSelectedHeading("");
+
+      setPages([]);
+
+      setPdf(null);
+
+      setTotalPages(0);
+
+      setCurrentPage(0);
+
+      setZoom(1);
+
+      setError("");
+
+      setLoading(false);
+
+      setLoadingText("");
 
     }, []);
 
@@ -1303,7 +1867,8 @@ const LoginPdf2 = () => {
     const handleKeyDown =
       (event) => {
 
-        if (!selectedPDF) return;
+        if (!selectedPDF)
+          return;
 
 
         if (
@@ -1331,8 +1896,7 @@ const LoginPdf2 = () => {
 
 
         if (
-          event.key === "+"
-          ||
+          event.key === "+" ||
           event.key === "="
         ) {
 
@@ -1406,27 +1970,49 @@ const LoginPdf2 = () => {
       const width =
         window.innerWidth;
 
-      if (width <= 600) {
+
+      if (
+        width <= 600
+      ) {
 
         return {
-          width: 320,
-          height: 450,
+
+          width:
+            320,
+
+          height:
+            450,
+
         };
 
       }
 
-      if (width <= 900) {
+
+      if (
+        width <= 900
+      ) {
 
         return {
-          width: 400,
-          height: 560,
+
+          width:
+            400,
+
+          height:
+            560,
+
         };
 
       }
+
 
       return {
-        width: 500,
-        height: 700,
+
+        width:
+          500,
+
+        height:
+          700,
+
       };
 
     };
@@ -1491,9 +2077,13 @@ const LoginPdf2 = () => {
 
           padding:
             {
-              xs: "25px 15px",
-              md: "40px",
+              xs:
+                "25px 15px",
+
+              md:
+                "40px",
             },
+
         }}
       >
 
@@ -1506,10 +2096,12 @@ const LoginPdf2 = () => {
             fontWeight:
               700,
 
-            mb: 4,
+            mb:
+              4,
 
             letterSpacing:
               "1px",
+
           }}
         >
           Golden Dreams
@@ -1531,7 +2123,9 @@ const LoginPdf2 = () => {
               alignItems:
                 "center",
 
-              gap: 2,
+              gap:
+                2,
+
             }}
           >
 
@@ -1560,6 +2154,7 @@ const LoginPdf2 = () => {
 
               mb:
                 3,
+
             }}
           >
 
@@ -1570,7 +2165,9 @@ const LoginPdf2 = () => {
                 <Button
                   color="inherit"
                   size="small"
-                  onClick={retry}
+                  onClick={
+                    retry
+                  }
                 >
                   Retry
                 </Button>
@@ -1610,6 +2207,7 @@ const LoginPdf2 = () => {
 
             mx:
               "auto",
+
           }}
         >
 
@@ -1651,6 +2249,7 @@ const LoginPdf2 = () => {
 
                   "&:hover":
                     {
+
                       transform:
                         "translateY(-5px)",
 
@@ -1659,7 +2258,9 @@ const LoginPdf2 = () => {
 
                       boxShadow:
                         "0 10px 30px rgba(0,0,0,.5)",
+
                     },
+
                 }}
               >
 
@@ -1673,6 +2274,7 @@ const LoginPdf2 = () => {
 
                     textAlign:
                       "center",
+
                   }}
                 >
                   {album.heading}
@@ -1700,6 +2302,7 @@ const LoginPdf2 = () => {
 
                 mt:
                   5,
+
               }}
             >
               No digital albums found.
@@ -1721,7 +2324,9 @@ const LoginPdf2 = () => {
   return (
 
     <Box
-      ref={containerRef}
+      ref={
+        containerRef
+      }
 
       sx={{
         position:
@@ -1747,6 +2352,7 @@ const LoginPdf2 = () => {
 
         flexDirection:
           "column",
+
       }}
     >
 
@@ -1786,6 +2392,7 @@ const LoginPdf2 = () => {
 
           zIndex:
             20,
+
         }}
       >
 
@@ -1802,23 +2409,16 @@ const LoginPdf2 = () => {
 
             minWidth:
               0,
+
           }}
         >
 
           <Tooltip title="Albums">
 
             <IconButton
-              onClick={() => {
-
-                setSelectedPDF("");
-
-                setPages([]);
-
-                setPdf(null);
-
-                setError("");
-
-              }}
+              onClick={
+                backToAlbums
+              }
 
               sx={{
                 color:
@@ -1855,6 +2455,7 @@ const LoginPdf2 = () => {
 
               textOverflow:
                 "ellipsis",
+
             }}
           >
             {selectedHeading}
@@ -1873,6 +2474,7 @@ const LoginPdf2 = () => {
 
             gap:
               0.5,
+
           }}
         >
 
@@ -1888,7 +2490,9 @@ const LoginPdf2 = () => {
                   "#fff",
               }}
             >
+
               <ZoomOut />
+
             </IconButton>
 
           </Tooltip>
@@ -1904,6 +2508,7 @@ const LoginPdf2 = () => {
 
               fontSize:
                 "14px",
+
             }}
           >
             {Math.round(
@@ -1924,7 +2529,9 @@ const LoginPdf2 = () => {
                   "#fff",
               }}
             >
+
               <ZoomIn />
+
             </IconButton>
 
           </Tooltip>
@@ -1950,9 +2557,13 @@ const LoginPdf2 = () => {
             >
 
               {isFullscreen ? (
+
                 <FullscreenExit />
+
               ) : (
+
                 <Fullscreen />
+
               )}
 
             </IconButton>
@@ -2009,6 +2620,7 @@ const LoginPdf2 = () => {
 
             zIndex:
               50,
+
           }}
         >
 
@@ -2019,16 +2631,9 @@ const LoginPdf2 = () => {
               <Button
                 color="inherit"
                 size="small"
-                onClick={() => {
-
-                  setError("");
-
-                  setSelectedPDF(
-                    (value) =>
-                      value
-                  );
-
-                }}
+                onClick={
+                  retry
+                }
               >
                 Retry
               </Button>
@@ -2077,6 +2682,7 @@ const LoginPdf2 = () => {
 
           overflow:
             "auto",
+
         }}
       >
 
@@ -2115,6 +2721,7 @@ const LoginPdf2 = () => {
 
               backdropFilter:
                 "blur(5px)",
+
             }}
           >
 
@@ -2132,6 +2739,7 @@ const LoginPdf2 = () => {
 
                 opacity:
                   0.85,
+
               }}
             >
               {loadingText}
@@ -2168,6 +2776,7 @@ const LoginPdf2 = () => {
 
                 alignItems:
                   "center",
+
               }}
             >
 
@@ -2250,6 +2859,7 @@ const LoginPdf2 = () => {
                 onFlip={
                   handleFlip
                 }
+
               >
 
                 {pages.map(
@@ -2264,6 +2874,7 @@ const LoginPdf2 = () => {
                       }
 
                       style={{
+
                         width:
                           "100%",
 
@@ -2284,6 +2895,7 @@ const LoginPdf2 = () => {
 
                         justifyContent:
                           "center",
+
                       }}
                     >
 
@@ -2303,6 +2915,7 @@ const LoginPdf2 = () => {
                         }
 
                         style={{
+
                           width:
                             "100%",
 
@@ -2317,7 +2930,9 @@ const LoginPdf2 = () => {
 
                           userSelect:
                             "none",
+
                         }}
+
                       />
 
                     </div>
@@ -2401,6 +3016,7 @@ const LoginPdf2 = () => {
 
               zIndex:
                 30,
+
             }}
           >
 
@@ -2414,7 +3030,8 @@ const LoginPdf2 = () => {
                   }
 
                   disabled={
-                    currentPage <= 0
+                    currentPage <=
+                    0
                   }
 
                   sx={{
@@ -2442,6 +3059,7 @@ const LoginPdf2 = () => {
 
                 fontSize:
                   "13px",
+
               }}
             >
 
