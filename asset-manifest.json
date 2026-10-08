@@ -1,16 +1,16 @@
 {
   "files": {
     "main.css": "/goldendreams/static/css/main.cbcd28e8.css",
-    "main.js": "/goldendreams/static/js/main.c041cd74.js",
+    "main.js": "/goldendreams/static/js/main.6ad3a518.js",
     "static/js/453.117b0875.chunk.js": "/goldendreams/static/js/453.117b0875.chunk.js",
     "static/media/logo512.png": "/goldendreams/static/media/logo512.b579ab93c0a79c031760.png",
     "index.html": "/goldendreams/index.html",
     "main.cbcd28e8.css.map": "/goldendreams/static/css/main.cbcd28e8.css.map",
-    "main.c041cd74.js.map": "/goldendreams/static/js/main.c041cd74.js.map",
+    "main.6ad3a518.js.map": "/goldendreams/static/js/main.6ad3a518.js.map",
     "453.117b0875.chunk.js.map": "/goldendreams/static/js/453.117b0875.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.cbcd28e8.css",
-    "static/js/main.c041cd74.js"
+    "static/js/main.6ad3a518.js"
   ]
 }
