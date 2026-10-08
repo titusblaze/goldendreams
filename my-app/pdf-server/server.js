@@ -4,55 +4,59 @@ const https = require("https");
 const { chromium } = require("playwright");
 
 const app = express();
+
 const PORT = process.env.PORT || 10000;
 
-// ==========================================
-// MIDDLEWARE
-// ==========================================
-
-app.use(
-  cors({
-    origin: "*",
-    methods: ["GET", "OPTIONS"],
-    allowedHeaders: ["*"],
-  })
-);
-
+app.use(cors());
 app.use(express.json());
 
-// ==========================================
-// ROOT
-// ==========================================
+console.log("");
+console.log("==========================================");
+console.log("GOLDEN DREAMS PDF SERVER");
+console.log("==========================================");
+console.log("Server starting...");
+console.log("Port:", PORT);
+console.log("==========================================");
+
+
+/* =========================================================
+   ROOT
+========================================================= */
 
 app.get("/", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Golden Dreams PDF server running",
+  res.json({
+    status: "ok",
+    service: "Golden Dreams PDF Server",
     api: "/api/pdf",
-    port: String(PORT),
   });
 });
 
-// ==========================================
-// VALIDATE MY CLOUD URL
-// ==========================================
+
+/* =========================================================
+   VALIDATE MY CLOUD SHARE URL
+========================================================= */
 
 function isValidMyCloudShareUrl(url) {
   try {
     const parsed = new URL(url);
 
     return (
-      parsed.hostname === "os5.mycloud.com" ||
-      parsed.hostname.endsWith(".mycloud.com")
+      parsed.protocol === "https:" &&
+      (
+        parsed.hostname === "os5.mycloud.com" ||
+        parsed.hostname.endsWith(".mycloud.com")
+      ) &&
+      parsed.pathname.includes("/action/share/")
     );
   } catch (error) {
     return false;
   }
 }
 
-// ==========================================
-// CONVERT PLAYWRIGHT COOKIES
-// ==========================================
+
+/* =========================================================
+   CONVERT PLAYWRIGHT COOKIES TO COOKIE HEADER
+========================================================= */
 
 function cookiesToHeader(cookies) {
   return cookies
@@ -60,11 +64,14 @@ function cookiesToHeader(cookies) {
     .join("; ");
 }
 
-// ==========================================
-// FIND MY CLOUD PDF
-// ==========================================
 
-async function findMyCloudPdf(page) {
+/* =========================================================
+   FIND MY CLOUD PDF
+   IMPORTANT:
+   LISTENERS ARE REGISTERED BEFORE page.goto()
+========================================================= */
+
+async function findMyCloudPdf(page, shareUrl) {
   console.log("");
   console.log("==========================================");
   console.log("SEARCHING FOR MY CLOUD PDF");
@@ -75,9 +82,10 @@ async function findMyCloudPdf(page) {
   const requests = [];
   const responses = [];
 
-  // ----------------------------------------
-  // REQUEST MONITOR
-  // ----------------------------------------
+
+  /* -------------------------------------------------------
+     REQUEST LISTENER
+  ------------------------------------------------------- */
 
   page.on("request", (request) => {
     const url = request.url();
@@ -95,7 +103,8 @@ async function findMyCloudPdf(page) {
       lower.includes("/content") ||
       lower.includes("/download") ||
       lower.includes("/file") ||
-      lower.includes("/files/")
+      lower.includes("/files/") ||
+      lower.includes("/sdk/")
     ) {
       console.log("");
       console.log("------------------------------------------");
@@ -107,9 +116,10 @@ async function findMyCloudPdf(page) {
     }
   });
 
-  // ----------------------------------------
-  // RESPONSE MONITOR
-  // ----------------------------------------
+
+  /* -------------------------------------------------------
+     RESPONSE LISTENER
+  ------------------------------------------------------- */
 
   page.on("response", (response) => {
     const url = response.url();
@@ -118,7 +128,8 @@ async function findMyCloudPdf(page) {
     let contentType = "";
 
     try {
-      contentType = response.headers()["content-type"] || "";
+      contentType =
+        response.headers()["content-type"] || "";
     } catch (error) {
       contentType = "";
     }
@@ -130,138 +141,90 @@ async function findMyCloudPdf(page) {
     });
 
     const lower = url.toLowerCase();
-    const lowerType = contentType.toLowerCase();
+    const type = contentType.toLowerCase();
+
 
     if (
-      lowerType.includes("application/pdf") ||
+      type.includes("application/pdf") ||
       lower.includes(".pdf") ||
       lower.includes("/content") ||
-      lower.includes("/download")
+      lower.includes("/download") ||
+      lower.includes("/sdk/")
     ) {
       console.log("");
       console.log("==========================================");
-      console.log("POSSIBLE PDF RESPONSE");
+      console.log("POSSIBLE FILE RESPONSE");
       console.log("==========================================");
       console.log("Status:", status);
       console.log("Content-Type:", contentType);
       console.log("URL:", url);
       console.log("==========================================");
 
+
       if (
         status >= 200 &&
         status < 400 &&
         (
-          lowerType.includes("application/pdf") ||
-          lower.includes(".pdf")
+          type.includes("application/pdf") ||
+          lower.includes(".pdf") ||
+          lower.includes("/content")
         )
       ) {
         pdfUrl = url;
+
+        console.log("");
+        console.log(">>> POSSIBLE PDF URL CAPTURED <<<");
+        console.log(pdfUrl);
       }
     }
   });
 
-  // ----------------------------------------
-  // WAIT FOR MY CLOUD
-  // ----------------------------------------
+
+  /* -------------------------------------------------------
+     OPEN MY CLOUD SHARE
+     LISTENERS ABOVE ARE ALREADY ACTIVE
+  ------------------------------------------------------- */
 
   console.log("");
-  console.log("Waiting for My Cloud page...");
+  console.log("Opening My Cloud share...");
 
-  await page.waitForTimeout(8000);
+  await page.goto(shareUrl, {
+    waitUntil: "commit",
+    timeout: 120000,
+  });
 
-  // ----------------------------------------
-  // PAGE INFORMATION
-  // ----------------------------------------
+  console.log("My Cloud navigation committed.");
+
+
+  /* -------------------------------------------------------
+     WAIT FOR MY CLOUD JAVASCRIPT / API REQUESTS
+  ------------------------------------------------------- */
+
+  console.log("");
+  console.log("Waiting for My Cloud content...");
+
+  await page.waitForTimeout(15000);
+
+
+  /* -------------------------------------------------------
+     PAGE INFORMATION
+  ------------------------------------------------------- */
+
+  console.log("");
+  console.log("Current page URL:");
+  console.log(page.url());
 
   try {
-    console.log("");
-    console.log("Current page URL:");
-    console.log(page.url());
-
-    console.log("");
     console.log("Page title:");
     console.log(await page.title());
   } catch (error) {
-    console.log("Page information error:", error.message);
+    console.log("Unable to read page title.");
   }
 
-  // ----------------------------------------
-  // CHECK PAGE LINKS
-  // ----------------------------------------
 
-  try {
-    const links = await page.locator("a").evaluateAll((elements) =>
-      elements.map((a) => ({
-        text: a.innerText || "",
-        href: a.href || "",
-      }))
-    );
-
-    console.log("");
-    console.log("------------------------------------------");
-    console.log("PAGE LINKS");
-    console.log("------------------------------------------");
-
-    for (const link of links) {
-      const href = link.href || "";
-      const lower = href.toLowerCase();
-
-      if (
-        lower.includes(".pdf") ||
-        lower.includes("/content") ||
-        lower.includes("/download") ||
-        lower.includes("/file") ||
-        lower.includes("/files/")
-      ) {
-        console.log("TEXT:", link.text);
-        console.log("HREF:", href);
-        console.log("------------------------------------------");
-
-        if (!pdfUrl && lower.includes(".pdf")) {
-          pdfUrl = href;
-        }
-      }
-    }
-  } catch (error) {
-    console.log("Link inspection error:", error.message);
-  }
-
-  // ----------------------------------------
-  // CHECK IFRAMES
-  // ----------------------------------------
-
-  try {
-    const frames = await page.locator("iframe").evaluateAll((elements) =>
-      elements.map((iframe) => iframe.src || "")
-    );
-
-    console.log("");
-    console.log("------------------------------------------");
-    console.log("IFRAMES");
-    console.log("------------------------------------------");
-
-    for (const frame of frames) {
-      console.log(frame);
-
-      const lower = frame.toLowerCase();
-
-      if (
-        lower.includes(".pdf") ||
-        lower.includes("/content") ||
-        lower.includes("/download")
-      ) {
-        if (!pdfUrl) {
-          pdfUrl = frame;
-        }
-      }
-    }
-  } catch (error) {
-    console.log("Iframe inspection error:", error.message);
-  }
-
-  // ----------------------------------------
-  // SEARCH RESPONSES
-  // ----------------------------------------
+  /* =======================================================
+     SEARCH CAPTURED RESPONSES
+  ======================================================= */
 
   if (!pdfUrl) {
     console.log("");
@@ -270,8 +233,11 @@ async function findMyCloudPdf(page) {
     console.log("------------------------------------------");
 
     for (const item of responses) {
-      const type = (item.contentType || "").toLowerCase();
       const url = item.url.toLowerCase();
+
+      const type =
+        (item.contentType || "").toLowerCase();
+
 
       if (
         type.includes("application/pdf") ||
@@ -281,24 +247,28 @@ async function findMyCloudPdf(page) {
           (
             url.includes(".pdf") ||
             url.includes("/content") ||
-            url.includes("/download")
+            url.includes("/download") ||
+            url.includes("/sdk/")
           )
         )
       ) {
+        console.log("");
         console.log("FOUND RESPONSE");
         console.log("Status:", item.status);
         console.log("Content-Type:", item.contentType);
         console.log("URL:", item.url);
 
         pdfUrl = item.url;
+
         break;
       }
     }
   }
 
-  // ----------------------------------------
-  // SEARCH REQUESTS
-  // ----------------------------------------
+
+  /* =======================================================
+     SEARCH CAPTURED REQUESTS
+  ======================================================= */
 
   if (!pdfUrl) {
     console.log("");
@@ -313,20 +283,70 @@ async function findMyCloudPdf(page) {
         url.includes(".pdf") ||
         url.includes("/content") ||
         url.includes("/download") ||
-        url.includes("/files/")
+        url.includes("/files/") ||
+        url.includes("/sdk/")
       ) {
+        console.log("");
         console.log("FOUND REQUEST");
         console.log(item.url);
 
         pdfUrl = item.url;
+
         break;
       }
     }
   }
 
-  // ----------------------------------------
-  // RESULT
-  // ----------------------------------------
+
+  /* =======================================================
+     SEARCH PAGE LINKS
+  ======================================================= */
+
+  if (!pdfUrl) {
+    try {
+      const links =
+        await page.locator("a").evaluateAll(
+          (elements) =>
+            elements.map((a) => ({
+              text: a.innerText || "",
+              href: a.href || "",
+            }))
+        );
+
+
+      for (const link of links) {
+        const href =
+          (link.href || "").toLowerCase();
+
+
+        if (
+          href.includes(".pdf") ||
+          href.includes("/content") ||
+          href.includes("/download") ||
+          href.includes("/files/")
+        ) {
+          console.log("");
+          console.log("PAGE LINK FOUND");
+          console.log("Text:", link.text);
+          console.log("URL:", link.href);
+
+          pdfUrl = link.href;
+
+          break;
+        }
+      }
+    } catch (error) {
+      console.log(
+        "Link inspection error:",
+        error.message
+      );
+    }
+  }
+
+
+  /* =======================================================
+     PDF FOUND
+  ======================================================= */
 
   if (pdfUrl) {
     console.log("");
@@ -339,44 +359,56 @@ async function findMyCloudPdf(page) {
     return pdfUrl;
   }
 
-  // ----------------------------------------
-  // DEBUG INFORMATION
-  // ----------------------------------------
+
+  /* =======================================================
+     PDF NOT FOUND
+  ======================================================= */
 
   console.log("");
   console.log("==========================================");
   console.log("NO PDF URL FOUND");
   console.log("==========================================");
 
-  console.log("Total requests:", requests.length);
-  console.log("Total responses:", responses.length);
+  console.log(
+    "Total requests:",
+    requests.length
+  );
+
+  console.log(
+    "Total responses:",
+    responses.length
+  );
+
 
   console.log("");
-  console.log("LAST REQUESTS:");
+  console.log("ALL REQUESTS:");
 
-  requests.slice(-30).forEach((item, index) => {
+  requests.forEach((item, index) => {
     console.log(
-      `${index + 1}. ${item.method} ${item.url}`
+      `${index + 1}. ${item.method} | ${item.resourceType} | ${item.url}`
     );
   });
 
-  console.log("");
-  console.log("LAST RESPONSES:");
 
-  responses.slice(-30).forEach((item, index) => {
+  console.log("");
+  console.log("ALL RESPONSES:");
+
+  responses.forEach((item, index) => {
     console.log(
       `${index + 1}. ${item.status} | ${item.contentType} | ${item.url}`
     );
   });
+
 
   throw new Error(
     "Unable to find My Cloud PDF content URL."
   );
 }
 
-// ==========================================
-// STREAM PDF FROM MY CLOUD
-// ==========================================
+
+/* =========================================================
+   STREAM PDF FROM MY CLOUD
+========================================================= */
 
 function streamPdfFromMyCloud(
   pdfUrl,
@@ -386,10 +418,12 @@ function streamPdfFromMyCloud(
   res
 ) {
   return new Promise((resolve, reject) => {
+
     console.log("");
     console.log("------------------------------------------");
     console.log("STREAMING PDF FROM MY CLOUD");
     console.log("------------------------------------------");
+
 
     const requestOptions = {
       method: "GET",
@@ -399,30 +433,31 @@ function streamPdfFromMyCloud(
           userAgent ||
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/154.0.0.0 Safari/537.36",
 
-        Accept:
+        "Accept":
           "application/pdf,application/octet-stream,*/*",
 
-        "Accept-Encoding": "identity",
+        "Accept-Encoding":
+          "identity",
 
-        Referer:
+        "Referer":
           referer ||
           "https://os5.mycloud.com/",
 
-        Cookie: cookies || "",
+        "Cookie":
+          cookies || "",
       },
 
       timeout: 180000,
     };
 
-    console.log("");
-    console.log("MY CLOUD CONTENT REQUEST");
-    console.log("URL:", pdfUrl);
 
     const request = https.request(
       pdfUrl,
       requestOptions,
       (upstream) => {
-        const status = upstream.statusCode || 0;
+
+        const status =
+          upstream.statusCode || 0;
 
         const contentType =
           upstream.headers["content-type"] || "";
@@ -430,27 +465,52 @@ function streamPdfFromMyCloud(
         const contentLength =
           upstream.headers["content-length"] || "";
 
+
         console.log("");
         console.log("------------------------------------------");
         console.log("MY CLOUD CONTENT RESPONSE");
         console.log("------------------------------------------");
         console.log("Status:", status);
         console.log("Content-Type:", contentType);
-        console.log("Content-Length:", contentLength);
-        console.log("------------------------------------------");
+        console.log(
+          "PDF Content-Length:",
+          contentLength || "unknown"
+        );
 
-        if (status < 200 || status >= 300) {
+
+        /* -------------------------------------------------
+           UPSTREAM ERROR
+        ------------------------------------------------- */
+
+        if (
+          status < 200 ||
+          status >= 300
+        ) {
           let errorBody = "";
 
-          upstream.setEncoding("utf8");
-
           upstream.on("data", (chunk) => {
-            errorBody += chunk;
+            errorBody += chunk.toString();
           });
 
           upstream.on("end", () => {
-            console.log("My Cloud error body:");
-            console.log(errorBody.substring(0, 1000));
+
+            console.log("");
+            console.log("MY CLOUD RETURNED ERROR");
+            console.log("Status:", status);
+            console.log(
+              "Response:",
+              errorBody.substring(0, 1000)
+            );
+
+
+            if (!res.headersSent) {
+              res.status(status).json({
+                error:
+                  "My Cloud returned an error.",
+                status,
+              });
+            }
+
 
             reject(
               new Error(
@@ -462,21 +522,10 @@ function streamPdfFromMyCloud(
           return;
         }
 
-        const isPdf =
-          contentType
-            .toLowerCase()
-            .includes("application/pdf") ||
-          pdfUrl.toLowerCase().includes(".pdf");
 
-        if (!isPdf) {
-          console.log(
-            "WARNING: Response does not identify itself as PDF."
-          );
-        }
-
-        // ------------------------------------
-        // RESPONSE HEADERS
-        // ------------------------------------
+        /* -------------------------------------------------
+           SEND PDF HEADERS
+        ------------------------------------------------- */
 
         res.status(200);
 
@@ -510,6 +559,7 @@ function streamPdfFromMyCloud(
           "nosniff"
         );
 
+
         if (contentLength) {
           res.setHeader(
             "Content-Length",
@@ -517,142 +567,229 @@ function streamPdfFromMyCloud(
           );
         }
 
+
         console.log("");
         console.log("PDF STREAM STARTED");
 
+
         let totalBytes = 0;
 
-        upstream.on("data", (chunk) => {
-          totalBytes += chunk.length;
-        });
 
-        upstream.on("error", (error) => {
-          console.error(
-            "PDF upstream stream error:",
-            error.message
-          );
+        /* -------------------------------------------------
+           COUNT BYTES
+        ------------------------------------------------- */
 
-          if (!res.headersSent) {
-            res.status(502);
+        upstream.on(
+          "data",
+          (chunk) => {
+            totalBytes += chunk.length;
           }
+        );
 
-          reject(error);
-        });
 
-        upstream.on("end", () => {
-          console.log("");
-          console.log("PDF STREAM COMPLETED");
-          console.log(
-            "Total bytes:",
-            totalBytes
-          );
+        /* -------------------------------------------------
+           UPSTREAM END
+        ------------------------------------------------- */
 
-          if (totalBytes === 0) {
-            console.error(
-              "ERROR: My Cloud returned an empty PDF."
+        upstream.on(
+          "end",
+          () => {
+
+            console.log("");
+            console.log("PDF STREAM COMPLETED");
+            console.log(
+              "Total bytes:",
+              totalBytes
             );
+
+
+            if (totalBytes === 0) {
+
+              console.log(
+                "ERROR: Empty PDF received."
+              );
+
+
+              if (!res.writableEnded) {
+                res.end();
+              }
+
+
+              reject(
+                new Error(
+                  "Empty PDF received from My Cloud."
+                )
+              );
+
+              return;
+            }
+
+
+            console.log("");
+            console.log(
+              "=========================================="
+            );
+
+            console.log(
+              "PDF SENT SUCCESSFULLY"
+            );
+
+            console.log(
+              "=========================================="
+            );
+
+
+            resolve();
+          }
+        );
+
+
+        /* -------------------------------------------------
+           UPSTREAM ERROR
+        ------------------------------------------------- */
+
+        upstream.on(
+          "error",
+          (error) => {
+
+            console.log("");
+            console.log(
+              "PDF STREAM ERROR:",
+              error.message
+            );
+
 
             if (!res.writableEnded) {
               res.end();
             }
 
-            reject(
-              new Error(
-                "Empty PDF received from My Cloud."
-              )
-            );
 
-            return;
+            reject(error);
           }
+        );
 
-          console.log("");
-          console.log(
-            "PDF SENT SUCCESSFULLY"
-          );
 
-          resolve();
-        });
+        /* -------------------------------------------------
+           PIPE PDF TO BROWSER
+        ------------------------------------------------- */
 
-        // IMPORTANT:
-        // Let pipe() handle the response ending.
         upstream.pipe(res);
       }
     );
 
-    request.on("timeout", () => {
-      console.error(
-        "My Cloud PDF request timed out."
-      );
 
-      request.destroy(
-        new Error(
-          "My Cloud PDF request timed out."
-        )
-      );
-    });
+    /* -----------------------------------------------------
+       REQUEST ERROR
+    ----------------------------------------------------- */
 
-    request.on("error", (error) => {
-      console.error(
-        "My Cloud HTTPS error:",
-        error.message
-      );
+    request.on(
+      "error",
+      (error) => {
 
-      if (!res.headersSent) {
-        res.status(502).json({
-          success: false,
-          error: error.message,
-        });
+        console.log("");
+        console.log(
+          "HTTPS REQUEST ERROR:",
+          error.message
+        );
+
+
+        if (!res.headersSent) {
+          res.status(500).json({
+            error:
+              "Unable to connect to My Cloud.",
+            message:
+              error.message,
+          });
+        } else if (!res.writableEnded) {
+          res.end();
+        }
+
+
+        reject(error);
       }
+    );
 
-      reject(error);
-    });
+
+    /* -----------------------------------------------------
+       REQUEST TIMEOUT
+    ----------------------------------------------------- */
+
+    request.on(
+      "timeout",
+      () => {
+
+        console.log(
+          "My Cloud request timed out."
+        );
+
+        request.destroy(
+          new Error(
+            "My Cloud PDF request timed out."
+          )
+        );
+      }
+    );
+
 
     request.end();
   });
 }
 
-// ==========================================
-// PDF API
-// ==========================================
+
+/* =========================================================
+   PDF API
+========================================================= */
 
 app.get("/api/pdf", async (req, res) => {
+
+  console.log("");
+  console.log("==========================================");
+  console.log("GOLDEN DREAMS PDF REQUEST");
+  console.log("==========================================");
+
+
+  const shareUrl =
+    req.query.url;
+
+
+  console.log("Share URL:");
+  console.log(shareUrl);
+
+
+  /* -------------------------------------------------------
+     VALIDATE URL
+  ------------------------------------------------------- */
+
+  if (!shareUrl) {
+
+    return res.status(400).json({
+      error:
+        "Missing My Cloud share URL.",
+    });
+  }
+
+
+  if (!isValidMyCloudShareUrl(shareUrl)) {
+
+    return res.status(400).json({
+      error:
+        "Invalid My Cloud share URL.",
+    });
+  }
+
+
   let browser = null;
 
+
   try {
-    console.log("");
-    console.log("==========================================");
-    console.log("GOLDEN DREAMS PDF REQUEST");
-    console.log("==========================================");
 
-    const shareUrl = req.query.url;
-
-    console.log("Share URL:");
-    console.log(shareUrl);
-
-    // --------------------------------------
-    // VALIDATE URL
-    // --------------------------------------
-
-    if (!shareUrl) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing url parameter.",
-      });
-    }
-
-    if (!isValidMyCloudShareUrl(shareUrl)) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid My Cloud URL.",
-      });
-    }
-
-    // --------------------------------------
-    // LAUNCH CHROMIUM
-    // --------------------------------------
+    /* -----------------------------------------------------
+       LAUNCH CHROMIUM
+    ----------------------------------------------------- */
 
     console.log("");
     console.log("Launching Chromium...");
+
 
     browser = await chromium.launch({
       headless: true,
@@ -663,66 +800,67 @@ app.get("/api/pdf", async (req, res) => {
         "--disable-dev-shm-usage",
         "--disable-gpu",
         "--no-zygote",
+        "--disable-software-rasterizer",
       ],
     });
 
-    console.log("Chromium launched.");
-
-    // --------------------------------------
-    // CREATE CONTEXT
-    // --------------------------------------
-
-    const context = await browser.newContext({
-      acceptDownloads: true,
-
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
-
-      viewport: {
-        width: 1440,
-        height: 900,
-      },
-    });
-
-    const page = await context.newPage();
-
-    // --------------------------------------
-    // OPEN MY CLOUD
-    // --------------------------------------
-
-    console.log("");
-    console.log("Opening My Cloud share...");
-
-    await page.goto(shareUrl, {
-      waitUntil: "commit",
-      timeout: 120000,
-    });
 
     console.log(
-      "My Cloud navigation committed."
+      "Chromium launched."
     );
 
-    // --------------------------------------
-    // WAIT FOR PDF URL
-    // --------------------------------------
 
-    console.log("");
-    console.log(
-      "Waiting for My Cloud PDF URL..."
-    );
+    /* -----------------------------------------------------
+       CREATE BROWSER CONTEXT
+    ----------------------------------------------------- */
+
+    const context =
+      await browser.newContext({
+        userAgent:
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+
+        viewport: {
+          width: 1440,
+          height: 900,
+        },
+
+        ignoreHTTPSErrors: true,
+      });
+
+
+    /* -----------------------------------------------------
+       CREATE PAGE
+    ----------------------------------------------------- */
+
+    const page =
+      await context.newPage();
+
+
+    /* -----------------------------------------------------
+       FIND PDF
+       IMPORTANT:
+       findMyCloudPdf() now performs page.goto()
+       AFTER registering listeners.
+    ----------------------------------------------------- */
 
     const pdfUrl =
-      await findMyCloudPdf(page);
+      await findMyCloudPdf(
+        page,
+        shareUrl
+      );
 
-    // --------------------------------------
-    // GET COOKIES
-    // --------------------------------------
+
+    /* -----------------------------------------------------
+       GET COOKIES
+    ----------------------------------------------------- */
 
     const cookies =
       await context.cookies();
 
+
     const cookieHeader =
       cookiesToHeader(cookies);
+
 
     console.log("");
     console.log(
@@ -730,100 +868,99 @@ app.get("/api/pdf", async (req, res) => {
       cookies.length
     );
 
-    // --------------------------------------
-    // USER AGENT
-    // --------------------------------------
+
+    /* -----------------------------------------------------
+       USER AGENT
+    ----------------------------------------------------- */
 
     const userAgent =
       await page.evaluate(
         () => navigator.userAgent
       );
 
-    // --------------------------------------
-    // REFERER
-    // --------------------------------------
 
-    const referer =
-      page.url() ||
-      shareUrl;
-
-    // --------------------------------------
-    // CLOSE BROWSER
-    // --------------------------------------
-
-    await browser.close();
-
-    browser = null;
-
-    console.log(
-      "Chromium closed."
-    );
-
-    // --------------------------------------
-    // STREAM PDF
-    // --------------------------------------
+    /* -----------------------------------------------------
+       STREAM PDF
+    ----------------------------------------------------- */
 
     await streamPdfFromMyCloud(
       pdfUrl,
       cookieHeader,
       userAgent,
-      referer,
+      shareUrl,
       res
     );
 
   } catch (error) {
-    console.error("");
-    console.error("==========================================");
-    console.error("PDF SERVER ERROR");
-    console.error("==========================================");
-    console.error(
-      "Error:",
-      error.message
-    );
 
-    if (error.stack) {
-      console.error(error.stack);
-    }
+    console.log("");
+    console.log("==========================================");
+    console.log("PDF SERVER ERROR");
+    console.log("==========================================");
+    console.log(error);
+    console.log("==========================================");
+
 
     if (!res.headersSent) {
+
       res.status(500).json({
-        success: false,
-        error: error.message,
+        error:
+          "Unable to load PDF from My Cloud.",
+        message:
+          error.message,
       });
+
+    } else if (!res.writableEnded) {
+
+      res.end();
+
     }
 
   } finally {
+
+    /* -----------------------------------------------------
+       CLOSE BROWSER
+    ----------------------------------------------------- */
+
     if (browser) {
+
       try {
+
         await browser.close();
+
+        console.log("");
         console.log(
-          "Chromium closed in finally."
+          "Chromium closed."
         );
-      } catch (closeError) {
-        console.error(
-          "Browser close error:",
-          closeError.message
+
+      } catch (error) {
+
+        console.log(
+          "Chromium close error:",
+          error.message
         );
+
       }
     }
   }
 });
 
-// ==========================================
-// START SERVER
-// ==========================================
+
+/* =========================================================
+   START SERVER
+========================================================= */
 
 app.listen(
   PORT,
   "0.0.0.0",
   () => {
+
     console.log("");
     console.log("==========================================");
     console.log("GOLDEN DREAMS PDF SERVER");
     console.log("==========================================");
     console.log(
-      "Server running on port",
-      PORT
+      `Server running on port ${PORT}`
     );
     console.log(
       "API: /api/pdf"
