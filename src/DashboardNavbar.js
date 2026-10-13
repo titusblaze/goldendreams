@@ -1,56 +1,62 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   AppBar,
   Toolbar,
   Typography,
-  Button,
+  IconButton,
   Box,
   Tooltip,
 } from "@mui/material";
+
 import { useNavigate } from "react-router-dom";
-import Logo from "../src/assets/image/logo512.png";
 import LogoutIcon from "@mui/icons-material/Logout";
+import Logo from "../src/assets/image/logo512.png";
 
 export default function DashboardNavbar() {
   const navigate = useNavigate();
 
   const [showNavbar, setShowNavbar] = useState(true);
-
-  // Store previous scroll position without causing re-renders
   const lastScrollY = useRef(0);
 
+  // Hide navbar while scrolling down and show it while scrolling up.
   useEffect(() => {
-  const handleScroll = () => {
-    const currentScrollY = window.scrollY;
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
 
-    // At the top → always show
-    if (currentScrollY <= 10) {
-      setShowNavbar(true);
-    }
-    // Scroll DOWN ↓ → hide
-    else if (currentScrollY > lastScrollY.current) {
-      setShowNavbar(false);
-    }
-    // Scroll UP ↑ → show
-    else if (currentScrollY < lastScrollY.current) {
-      setShowNavbar(true);
-    }
+      if (currentScrollY < 10) {
+        setShowNavbar(true);
+      } else if (currentScrollY > lastScrollY.current + 5) {
+        setShowNavbar(false);
+      } else if (currentScrollY < lastScrollY.current - 5) {
+        setShowNavbar(true);
+      }
 
-    // Save current position
-    lastScrollY.current = currentScrollY;
-  };
+      lastScrollY.current = currentScrollY;
+    };
 
-  window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("scroll", handleScroll, {
+      passive: true,
+    });
 
-  return () => {
-    window.removeEventListener("scroll", handleScroll);
-  };
-}, []);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
 
+  // Secure logout navigation
   const handleLogout = () => {
+    // Clear the authentication information used by this app.
     localStorage.removeItem("isLoggedIn");
     localStorage.removeItem("username");
-    navigate("/login");
+    localStorage.removeItem("userName");
+
+    // Clear session-based authentication, if used.
+    sessionStorage.removeItem("isLoggedIn");
+    sessionStorage.removeItem("username");
+    sessionStorage.removeItem("userName");
+
+    // Replace the current history entry rather than adding another one.
+    navigate("/login", { replace: true });
   };
 
   return (
@@ -58,71 +64,161 @@ export default function DashboardNavbar() {
       position="fixed"
       elevation={0}
       sx={{
-        background: "rgba(255, 255, 255, 0)",
-        color: "black",
+        top: 0,
+        left: 0,
+        right: 0,
+        width: "100%",
+        background:
+          "linear-gradient(110deg, #090A0F 0%, #15130F 50%, #090A0F 100%)",
+        color: "#F5E7C1",
         zIndex: 999999,
-        padding: "20px 0px",
 
-        // Animation
         transform: showNavbar
           ? "translateY(0)"
-          : "translateY(-120%)",
+          : "translateY(-110%)",
 
         transition: "transform 0.35s ease-in-out",
 
-        // Prevent clicking when hidden
         pointerEvents: showNavbar ? "auto" : "none",
+
+        borderBottom: "1px solid rgba(212,175,91,0.35)",
+
+        boxShadow: "0 5px 24px rgba(0,0,0,0.28)",
+
+        "&::before": {
+          content: '""',
+          position: "absolute",
+          bottom: 0,
+          left: "10%",
+          width: "80%",
+          height: "1px",
+          background:
+            "linear-gradient(90deg, transparent, rgba(231,199,121,0.65), transparent)",
+        },
       }}
     >
-      <Toolbar>
+      <Toolbar
+        disableGutters
+        sx={{
+          width: "100%",
+          minHeight: {
+            xs: "62px",
+            sm: "72px",
+            md: "78px",
+          },
+          px: {
+            xs: 1.5,
+            sm: 3,
+            md: 5,
+            lg: 7,
+          },
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 2,
+        }}
+      >
+        {/* Logo and Brand */}
         <Box
           sx={{
             display: "flex",
             alignItems: "center",
-            flexGrow: 1,
+            gap: { xs: 1, sm: 1.5 },
+            minWidth: 0,
+            flex: "1 1 auto",
           }}
         >
-          <img
+          <Box
+            component="img"
             src={Logo}
-            alt="Logo"
-            style={{
-              width: 40,
-              height: 40,
-              marginRight: 10,
-              borderRadius: "8px",
+            alt="Golden Dreams Logo"
+            sx={{
+              width: { xs: 38, sm: 46, md: 50 },
+              height: { xs: 38, sm: 46, md: 50 },
+              flexShrink: 0,
               objectFit: "contain",
+              borderRadius: 0,
             }}
           />
 
-          <Typography
-            variant="h6"
-            sx={{
-              fontWeight: 600,
-              color: "white",
-            }}
-          >
-            Goolden Dreams
-          </Typography>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              sx={{
+                fontSize: {
+                  xs: "1rem",
+                  sm: "1.25rem",
+                  md: "1.45rem",
+                },
+                fontWeight: 750,
+                lineHeight: 1.2,
+                letterSpacing: {
+                  xs: "0.02em",
+                  sm: "0.045em",
+                },
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                background:
+                  "linear-gradient(90deg, #F5E5B5 0%, #D5AE5D 48%, #F4DCA0 100%)",
+                backgroundClip: "text",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              Golden Dreams
+            </Typography>
+
+            <Typography
+              sx={{
+                display: { xs: "none", sm: "block" },
+                mt: 0.35,
+                fontSize: "0.62rem",
+                letterSpacing: "0.25em",
+                color: "rgba(235,221,188,0.65)",
+              }}
+            >
+              CREATIVE STUDIO
+            </Typography>
+          </Box>
         </Box>
 
+        {/* Logout Button */}
         <Tooltip title="Logout" arrow>
-          <Button
-            variant="contained"
+          <IconButton
             onClick={handleLogout}
+            aria-label="Logout"
             sx={{
-              height: "60px",
-              width: "60px",
-              backgroundColor: "#1e1e1f",
-              borderRadius: "50%",
-              minWidth: 0,
+              width: { xs: 40, sm: 46, md: 48 },
+              height: { xs: 40, sm: 46, md: 48 },
+              flexShrink: 0,
+              color: "#E6C477",
+              borderRadius: "12px",
+              background:
+                "linear-gradient(145deg, rgba(214,175,87,0.13), rgba(214,175,87,0.035))",
+              border: "1px solid rgba(214,175,87,0.28)",
+              transition: "all 0.25s ease",
 
               "&:hover": {
-                backgroundColor: "#125ea8",
+                color: "#111111",
+                background:
+                  "linear-gradient(135deg, #F1D995, #C69B42)",
+                borderColor: "#F1D995",
+                boxShadow:
+                  "0 0 20px rgba(214,175,87,0.22)",
+                transform: "translateY(-1px)",
+              },
+
+              "&:active": {
+                transform: "scale(0.96)",
               },
             }}
           >
-            <LogoutIcon />
-          </Button>
+            <LogoutIcon
+              sx={{
+                fontSize: { xs: 21, sm: 23 },
+              }}
+            />
+          </IconButton>
         </Tooltip>
       </Toolbar>
     </AppBar>

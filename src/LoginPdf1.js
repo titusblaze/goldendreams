@@ -1,424 +1,180 @@
-import React, { useEffect, useState } from "react";
-import { Box, IconButton, Tooltip, Typography } from "@mui/material";
+import React, { useEffect, useRef, useState } from "react";
 
 import {
+  Box,
+  IconButton,
+  Typography,
+  Tooltip,
+} from "@mui/material";
+
+import {
+  MenuBook,
+  KeyboardArrowDown,
+  Check,
   Fullscreen,
   CloseFullscreen,
-  OpenInNew,
-  MenuBook,
-  KeyboardArrowUp,
-  KeyboardArrowDown,
 } from "@mui/icons-material";
 
-// =========================================================
-// GOOGLE APPS SCRIPT GET API
-// =========================================================
+// =====================================================
+// GOOGLE APPS SCRIPT API
+// =====================================================
 
 const DATA_API =
   "https://script.google.com/macros/s/AKfycbxNG3fuMW_DivRzBfhcPdwcJ3MTBgHOic1AhkWiMNhsXDq56a77Rg7UP4PpjeVQ116tbA/exec";
 
-// =========================================================
+// =====================================================
 // EXTRACT GOOGLE DRIVE FILE ID
-// =========================================================
+// =====================================================
 
 const getDriveFileId = (url) => {
   if (!url) return null;
 
   const value = String(url).trim();
+  const fileMatch = value.match(/\/file\/d\/([^/]+)/);
 
-  // Normal Google Drive:
-  // https://drive.google.com/file/d/FILE_ID/view
-  const fileMatch =
-    value.match(
-      /\/file\/d\/([^/]+)/
-    );
+  if (fileMatch) return fileMatch[1];
 
-  if (fileMatch) {
-    return fileMatch[1];
-  }
-
-  // Also support:
-  // https://drive.google.com/open?id=FILE_ID
   try {
-    const urlObject = new URL(value);
-
-    const id =
-      urlObject.searchParams.get("id");
-
-    if (id) {
-      return id;
-    }
-  } catch (error) {
-    console.warn(
-      "Invalid Google Drive URL:",
-      value
-    );
+    const parsedUrl = new URL(value);
+    return parsedUrl.searchParams.get("id");
+  } catch {
+    return null;
   }
-
-  return null;
 };
 
 export default function LoginPdf1() {
-  // =========================================================
-  // LOGIN USER
-  // =========================================================
+  const username = localStorage.getItem("username") || "";
 
-  const username =
-    localStorage.getItem("username");
-
-  // =========================================================
-  // API DATA
-  // =========================================================
+  const viewerRef = useRef(null);
+  const menuContainerRef = useRef(null);
 
   const [data, setData] = useState([]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const [selectedIndex, setSelectedIndex] =
-    useState(0);
+  const [albumMenuOpen, setAlbumMenuOpen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [scrollDirection, setScrollDirection] = useState(null);
+  const [showScrollIndicator, setShowScrollIndicator] = useState(false);
 
-  const [apiError, setApiError] =
-    useState("");
-
-  // =========================================================
-  // FULLSCREEN
-  // =========================================================
-
-  const [fullscreen, setFullscreen] =
-    useState(false);
-
-  // =========================================================
-  // SCROLL INDICATOR
-  // =========================================================
-
-  const [scrollDirection, setScrollDirection] =
-    useState(null);
-
-  const [scrollAnimation, setScrollAnimation] =
-    useState(false);
-
-  // =========================================================
-  // FETCH API
-  // =========================================================
+  // =====================================================
+  // FETCH ALBUMS
+  // =====================================================
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchAlbums = async () => {
+      if (!username.trim()) {
+        setError("Please login again to view your albums.");
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
-        setApiError("");
+        setError("");
 
-        const res =
-          await fetch(DATA_API);
+        const response = await fetch(DATA_API);
 
-        if (!res.ok) {
-          throw new Error(
-            `API error: ${res.status}`
-          );
+        if (!response.ok) {
+          throw new Error("Unable to connect to the API.");
         }
 
-        const jsonData =
-          await res.json();
+        const result = await response.json();
 
-        // ===================================================
-        // FILTER BY LOGGED-IN USERNAME
-        // ===================================================
+        const albums = Array.isArray(result)
+          ? result.filter(
+              (item) =>
+                String(item.UserName ?? "").trim() ===
+                  username.trim() &&
+                String(item.heading1 ?? "").trim() &&
+                String(item.pdf1 ?? "").trim()
+            )
+          : [];
 
-        const filtered =
-          Array.isArray(jsonData)
-            ? jsonData.filter(
-                (item) =>
-                  String(
-                    item.UserName ?? ""
-                  ).trim() ===
-                  String(
-                    username ?? ""
-                  ).trim()
-              )
-            : [];
-
-        // ===================================================
-        // ONLY RECORDS HAVING heading1 + pdf1
-        // ===================================================
-
-        const validData =
-          filtered.filter(
-            (item) =>
-              String(
-                item.heading1 ?? ""
-              ).trim() &&
-              String(
-                item.pdf1 ?? ""
-              ).trim()
-          );
-
-        setData(validData);
-
+        setData(albums);
         setSelectedIndex(0);
-      } catch (error) {
-        console.error(
-          "Error fetching API:",
-          error
-        );
 
-        setApiError(
-          "Unable to load PDF information."
-        );
+        if (!albums.length) {
+          setError("No albums are available for this account.");
+        }
+      } catch (err) {
+        console.error("Album API error:", err);
+        setError("Unable to load albums. Please try again.");
       } finally {
         setLoading(false);
       }
     };
 
-    if (username) {
-      fetchData();
-    } else {
-      setLoading(false);
-
-      setApiError(
-        "User session not found. Please login again."
-      );
-    }
+    fetchAlbums();
   }, [username]);
 
-  // =========================================================
-  // CURRENT RECORD
-  // =========================================================
+  // =====================================================
+  // CURRENT ALBUM
+  // =====================================================
 
-  const selectedData =
-    data[selectedIndex];
+  const currentAlbum = data[selectedIndex];
+  const currentHeading = currentAlbum?.heading1 || "Golden Dreams";
 
-  // =========================================================
-  // CURRENT GOOGLE DRIVE LINK
-  // =========================================================
+  const fileId = getDriveFileId(currentAlbum?.pdf1);
 
-  const driveLink =
-    selectedData?.pdf1 || "";
-
-  // =========================================================
-  // EXTRACT FILE ID
-  // =========================================================
-
-  const fileId =
-    getDriveFileId(driveLink);
-
-  // =========================================================
-  // GOOGLE DRIVE PREVIEW URL
-  //
-  // SAME FORMAT AS YOUR OLD WORKING CODE
-  // =========================================================
-
-  const PDF_URL = fileId
+  const pdfUrl = fileId
     ? `https://drive.google.com/file/d/${fileId}/preview?rm=minimal`
     : "";
 
-  // =========================================================
-  // GOOGLE DRIVE OPEN URL
-  //
-  // SAME FORMAT AS YOUR OLD WORKING CODE
-  // =========================================================
-
-  const PDF_VIEW_URL = fileId
-    ? `https://drive.google.com/file/d/${fileId}/view`
-    : "";
-
-  // =========================================================
-  // CURRENT HEADING
-  // =========================================================
-
-  const currentHeading =
-    selectedData?.heading1 ||
-    "Golden Dreams";
-
-  // =========================================================
-  // SCROLL DIRECTION
-  // =========================================================
+  // =====================================================
+  // OUTSIDE CLICK / ESCAPE CLOSES ALBUM MENU
+  // =====================================================
 
   useEffect(() => {
-    let wheelStopTimer;
-
-    const handleWheel = (event) => {
-      const direction =
-        event.deltaY > 0
-          ? "down"
-          : "up";
-
-      setScrollDirection(direction);
-
-      setScrollAnimation(false);
-
-      requestAnimationFrame(() => {
-        setScrollAnimation(true);
-      });
-
-      clearTimeout(wheelStopTimer);
-
-      wheelStopTimer =
-        setTimeout(() => {
-          setScrollAnimation(false);
-        }, 900);
+    const handleOutsideClick = (event) => {
+      if (
+        menuContainerRef.current &&
+        !menuContainerRef.current.contains(event.target)
+      ) {
+        setAlbumMenuOpen(false);
+      }
     };
 
-    window.addEventListener(
-      "wheel",
-      handleWheel,
-      { passive: true }
-    );
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setAlbumMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handleOutsideClick);
+    document.addEventListener("keydown", handleEscape);
 
     return () => {
-      clearTimeout(wheelStopTimer);
-
-      window.removeEventListener(
-        "wheel",
-        handleWheel
-      );
+      document.removeEventListener("pointerdown", handleOutsideClick);
+      document.removeEventListener("keydown", handleEscape);
     };
   }, []);
 
-  // =========================================================
-  // TOUCH SWIPE
-  // =========================================================
-
-  useEffect(() => {
-    let touchStartY = 0;
-
-    const handleTouchStart = (event) => {
-      if (
-        event.touches &&
-        event.touches.length > 0
-      ) {
-        touchStartY =
-          event.touches[0].clientY;
-      }
-    };
-
-    const handleTouchMove = (event) => {
-      if (
-        !event.touches ||
-        event.touches.length === 0
-      ) {
-        return;
-      }
-
-      const currentY =
-        event.touches[0].clientY;
-
-      const difference =
-        touchStartY - currentY;
-
-      if (Math.abs(difference) < 8) {
-        return;
-      }
-
-      const direction =
-        difference > 0
-          ? "down"
-          : "up";
-
-      setScrollDirection(direction);
-
-      setScrollAnimation(false);
-
-      requestAnimationFrame(() => {
-        setScrollAnimation(true);
-      });
-
-      setTimeout(() => {
-        setScrollAnimation(false);
-      }, 900);
-    };
-
-    window.addEventListener(
-      "touchstart",
-      handleTouchStart,
-      { passive: true }
-    );
-
-    window.addEventListener(
-      "touchmove",
-      handleTouchMove,
-      { passive: true }
-    );
-
-    return () => {
-      window.removeEventListener(
-        "touchstart",
-        handleTouchStart
-      );
-
-      window.removeEventListener(
-        "touchmove",
-        handleTouchMove
-      );
-    };
-  }, []);
-
-  // =========================================================
-  // SELECT PDF
-  // =========================================================
-
-  const selectPDF = (index) => {
-    setSelectedIndex(index);
-
-    setScrollDirection(null);
-    setScrollAnimation(false);
-  };
-
-  // =========================================================
-  // OPEN PDF
-  // =========================================================
-
-  const openPDF = () => {
-    if (!PDF_VIEW_URL) {
-      return;
-    }
-
-    window.open(
-      PDF_VIEW_URL,
-      "_blank",
-      "noopener,noreferrer"
-    );
-  };
-
-  // =========================================================
+  // =====================================================
   // FULLSCREEN
-  // =========================================================
+  // =====================================================
 
-  const toggleFullscreen =
-    async () => {
-      const viewer =
-        document.getElementById(
-          "golden-dreams-viewer"
-        );
-
-      try {
-        if (
-          !document.fullscreenElement
-        ) {
-          await viewer?.requestFullscreen();
-        } else {
-          await document.exitFullscreen();
-        }
-      } catch (error) {
-        console.error(
-          "Fullscreen error:",
-          error
-        );
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await viewerRef.current?.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
       }
-    };
-
-  // =========================================================
-  // FULLSCREEN STATE
-  // =========================================================
+    } catch (err) {
+      console.error("Fullscreen error:", err);
+    }
+  };
 
   useEffect(() => {
-    const handleFullscreenChange =
-      () => {
-        setFullscreen(
-          Boolean(
-            document.fullscreenElement
-          )
-        );
-      };
+    const handleFullscreenChange = () => {
+      setFullscreen(
+        document.fullscreenElement === viewerRef.current
+      );
+      setAlbumMenuOpen(false);
+    };
 
     document.addEventListener(
       "fullscreenchange",
@@ -433,1145 +189,589 @@ export default function LoginPdf1() {
     };
   }, []);
 
-  // =========================================================
-  // LOADING
-  // =========================================================
+  // =====================================================
+  // SELECT ALBUM
+  // =====================================================
+
+  const selectAlbum = (index) => {
+    setSelectedIndex(index);
+    setAlbumMenuOpen(false);
+    setScrollDirection(null);
+    setShowScrollIndicator(false);
+  };
+
+  // =====================================================
+  // SCROLL INDICATOR
+  // =====================================================
+
+  useEffect(() => {
+    let hideTimer;
+
+    const handleWheel = (event) => {
+      setScrollDirection(event.deltaY > 0 ? "down" : "up");
+      setShowScrollIndicator(true);
+
+      clearTimeout(hideTimer);
+
+      hideTimer = setTimeout(() => {
+        setShowScrollIndicator(false);
+      }, 900);
+    };
+
+    window.addEventListener("wheel", handleWheel, {
+      passive: true,
+    });
+
+    return () => {
+      clearTimeout(hideTimer);
+      window.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
+
+  // =====================================================
+  // LOADING SCREEN
+  // =====================================================
 
   if (loading) {
     return (
       <Box
         sx={{
-          width: "100%",
           height: "100dvh",
-          minHeight: "100vh",
-
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-
-          flexDirection: "column",
-
+          gap: 2,
+          color: "#D8B46A",
           background:
-            "radial-gradient(circle at center, #1b1e23 0%, #090a0d 55%, #020203 100%)",
-
-          color: "#fff",
+            "radial-gradient(circle, #20202A 0%, #090C14 60%, #020307 100%)",
         }}
       >
-        <MenuBook
-          sx={{
-            fontSize: 48,
-            color: "#d6b56d",
-            mb: 2,
-
-            filter:
-              "drop-shadow(0 0 15px rgba(214,181,109,.5))",
-          }}
-        />
+        <MenuBook sx={{ fontSize: 48 }} />
 
         <Typography
           sx={{
-            fontSize: 13,
-            letterSpacing: 2,
-            color:
-              "rgba(255,255,255,.55)",
+            fontSize: 11,
+            letterSpacing: 3,
+            color: "#B8B5AD",
           }}
         >
-          LOADING DIGITAL ALBUM
+          LOADING YOUR COLLECTION
         </Typography>
 
-        <Box
-          sx={{
-            display: "flex",
-            gap: 0.7,
-            mt: 2,
-          }}
-        >
-          {[0, 1, 2].map(
-            (item) => (
-              <Box
-                key={item}
-                sx={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  background:
-                    "#d6b56d",
-
-                  animation:
-                    `loginPdfDot 1.2s ${item * 0.2}s infinite ease-in-out`,
-                }}
-              />
-            )
-          )}
+        <Box sx={{ display: "flex", gap: 1 }}>
+          {[0, 1, 2].map((dot) => (
+            <Box
+              key={dot}
+              sx={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                bgcolor: "#D8B46A",
+                animation: "albumPulse 1s infinite",
+                animationDelay: `${dot * 0.2}s`,
+              }}
+            />
+          ))}
         </Box>
+
+        <style>
+          {`
+            @keyframes albumPulse {
+              0%, 100% { opacity: .25; transform: translateY(0); }
+              50% { opacity: 1; transform: translateY(-4px); }
+            }
+          `}
+        </style>
       </Box>
     );
   }
 
-  // =========================================================
-  // ERROR
-  // =========================================================
+  // =====================================================
+  // ERROR SCREEN
+  // =====================================================
 
-  if (
-    apiError ||
-    data.length === 0
-  ) {
+  if (error || !data.length) {
     return (
       <Box
         sx={{
-          width: "100%",
-          height: "100dvh",
-          minHeight: "100vh",
-
+          minHeight: "100dvh",
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-
-          flexDirection: "column",
-
-          background:
-            "radial-gradient(circle at center, #1b1e23 0%, #090a0d 55%, #020203 100%)",
-
-          color: "#fff",
-
           textAlign: "center",
-
           px: 3,
+          gap: 2,
+          color: "#F8F0DF",
+          background:
+            "radial-gradient(circle, #20202A 0%, #090C14 60%, #020307 100%)",
         }}
       >
-        <MenuBook
-          sx={{
-            fontSize: 48,
-            color: "#d6b56d",
-            mb: 2,
-          }}
-        />
+        <MenuBook sx={{ fontSize: 46, color: "#D8B46A" }} />
 
-        <Typography
-          sx={{
-            fontSize: 17,
-            fontWeight: 700,
-            mb: 1,
-          }}
-        >
-          {apiError ||
-            "No PDF found for this user"}
+        <Typography sx={{ fontSize: 16, fontWeight: 700 }}>
+          {error || "No albums found"}
         </Typography>
 
-        <Typography
-          sx={{
-            fontSize: 12,
-            color:
-              "rgba(255,255,255,.45)",
-          }}
-        >
-          Please check your login
-          or Google Sheet data.
+        <Typography sx={{ color: "#8F94A3", fontSize: 12 }}>
+          Please check your login and Google Sheet data.
         </Typography>
       </Box>
     );
   }
 
-  // =========================================================
-  // UI
-  // =========================================================
+  // =====================================================
+  // MAIN VIEWER
+  // =====================================================
 
   return (
     <Box
+      ref={viewerRef}
       id="golden-dreams-viewer"
       sx={{
+        position: "relative",
+        isolation: "isolate",
         width: "100%",
         height: "100dvh",
         minHeight: "100vh",
-
-        position: "relative",
-
         overflow: "hidden",
+        color: "#F8F0DF",
+        bgcolor: "#080A10",
 
-        background:
-          "radial-gradient(circle at center, #1b1e23 0%, #090a0d 55%, #020203 100%)",
-
-        color: "#fff",
-
-        userSelect: "none",
-
-        WebkitTapHighlightColor:
-          "transparent",
+        "&:fullscreen": {
+          width: "100%",
+          height: "100%",
+          minHeight: 0,
+          background: "#080A10",
+        },
       }}
     >
-      {/* BACKGROUND */}
+      {/* PDF VIEWER */}
 
       <Box
         sx={{
           position: "absolute",
           inset: 0,
-
-          pointerEvents: "none",
-
-          background:
-            "radial-gradient(circle at 50% 45%, rgba(255,255,255,.055), transparent 48%)",
-
-          zIndex: 0,
-        }}
-      />
-
-      {/* =====================================================
-          PDF FRAME
-      ===================================================== */}
-
-      <Box
-        sx={{
-          position: "absolute",
-
-          top: {
-            xs:
-              data.length > 1
-                ? 112
-                : 66,
-
-            sm:
-              data.length > 1
-                ? 122
-                : 76,
-
-            md:
-              data.length > 1
-                ? 132
-                : 84,
-          },
-
-          bottom: {
-            xs: 55,
-            sm: 62,
-            md: 70,
-          },
-
-          left: {
-            xs: 4,
-            sm: 14,
-            md: 38,
-          },
-
-          right: {
-            xs: 4,
-            sm: 14,
-            md: 38,
-          },
-
-          overflow: "hidden",
-
-          borderRadius: {
-            xs: "10px",
-            sm: "15px",
-            md: "20px",
-          },
-
-          background: "#111",
-
-          border:
-            "1px solid rgba(255,255,255,.09)",
-
-          boxShadow:
-            "0 30px 100px rgba(0,0,0,.82)",
-
-          zIndex: 2,
+          zIndex: 1,
+          bgcolor: "#111",
         }}
       >
-        <iframe
-          key={PDF_URL}
-          src={PDF_URL}
-          title={currentHeading}
-          allow="autoplay"
-          allowFullScreen
-          style={{
-            width: "100%",
-            height: "100%",
-
-            border: "none",
-
-            display: "block",
-
-            background: "#111",
-          }}
-        />
-
-        {/* EDGE EFFECT */}
-
-        <Box
-          sx={{
-            position: "absolute",
-            inset: 0,
-
-            pointerEvents: "none",
-
-            background:
-              "linear-gradient(90deg, rgba(0,0,0,.20), transparent 12%, transparent 88%, rgba(0,0,0,.20))",
-
-            zIndex: 4,
-          }}
-        />
+        {pdfUrl ? (
+          <iframe
+            key={pdfUrl}
+            src={pdfUrl}
+            title={currentHeading}
+            allow="fullscreen"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+            style={{
+              width: "100%",
+              height: "100%",
+              border: 0,
+              display: "block",
+              background: "#111",
+            }}
+          />
+        ) : (
+          <Box
+            sx={{
+              height: "100%",
+              display: "grid",
+              placeItems: "center",
+              p: 3,
+            }}
+          >
+            <Typography>
+              This album does not have a valid Google Drive link.
+            </Typography>
+          </Box>
+        )}
       </Box>
 
-      {/* =====================================================
-          LEFT SCROLL INDICATOR
-      ===================================================== */}
-
-      {scrollDirection && (
-        <Box
-          sx={{
-            position: "absolute",
-
-            left: {
-              xs: 14,
-              sm: 24,
-              md: 48,
-            },
-
-            top: "50%",
-
-            transform:
-              "translateY(-50%)",
-
-            width: {
-              xs: 34,
-              sm: 38,
-              md: 42,
-            },
-
-            height: {
-              xs: 145,
-              sm: 165,
-              md: 185,
-            },
-
-            display: "flex",
-
-            alignItems: "center",
-
-            justifyContent: "center",
-
-            pointerEvents: "none",
-
-            zIndex: 60,
-
-            opacity:
-              scrollAnimation ? 1 : 0,
-
-            transition:
-              "opacity .3s ease",
-
-            "&::before": {
-              content: '""',
-
-              position: "absolute",
-
-              inset: 0,
-
-              borderRadius: "30px",
-
-              background:
-                "linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015))",
-
-              border:
-                "1px solid rgba(255,255,255,.08)",
-
-              backdropFilter:
-                "blur(12px)",
-
-              boxShadow:
-                "0 10px 35px rgba(0,0,0,.35)",
-
-              opacity: .75,
-            },
-
-            "@media (max-width:600px)":
-              {
-                left: 10,
-                height: 135,
-              },
-          }}
-        >
-          {/* TRACK */}
-
-          <Box
-            sx={{
-              position: "absolute",
-
-              top: 27,
-              bottom: 27,
-
-              left: "50%",
-
-              width: "1px",
-
-              transform:
-                "translateX(-50%)",
-
-              background:
-                "linear-gradient(180deg, transparent, rgba(214,181,109,.55) 25%, rgba(214,181,109,.55) 75%, transparent)",
-
-              boxShadow:
-                "0 0 7px rgba(214,181,109,.25)",
-            }}
-          />
-
-          {/* UP */}
-
-          <Box
-            sx={{
-              position: "absolute",
-
-              top: 8,
-
-              left: "50%",
-
-              transform:
-                "translateX(-50%)",
-
-              color:
-                scrollDirection ===
-                "up"
-                  ? "#d6b56d"
-                  : "rgba(255,255,255,.22)",
-
-              filter:
-                scrollDirection ===
-                "up"
-                  ? "drop-shadow(0 0 7px rgba(214,181,109,.75))"
-                  : "none",
-
-              animation:
-                scrollDirection ===
-                "up"
-                  ? "indicatorArrowUp .8s ease-in-out infinite"
-                  : "none",
-
-              zIndex: 3,
-
-              "& svg": {
-                fontSize: {
-                  xs: 19,
-                  sm: 21,
-                  md: 23,
-                },
-              },
-            }}
-          >
-            <KeyboardArrowUp />
-          </Box>
-
-          {/* DOWN */}
-
-          <Box
-            sx={{
-              position: "absolute",
-
-              bottom: 8,
-
-              left: "50%",
-
-              transform:
-                "translateX(-50%)",
-
-              color:
-                scrollDirection ===
-                "down"
-                  ? "#d6b56d"
-                  : "rgba(255,255,255,.22)",
-
-              filter:
-                scrollDirection ===
-                "down"
-                  ? "drop-shadow(0 0 7px rgba(214,181,109,.75))"
-                  : "none",
-
-              animation:
-                scrollDirection ===
-                "down"
-                  ? "indicatorArrowDown .8s ease-in-out infinite"
-                  : "none",
-
-              zIndex: 3,
-
-              "& svg": {
-                fontSize: {
-                  xs: 19,
-                  sm: 21,
-                  md: 23,
-                },
-              },
-            }}
-          >
-            <KeyboardArrowDown />
-          </Box>
-
-          {/* PARTICLE */}
-
-          <Box
-            sx={{
-              position: "absolute",
-
-              left: "50%",
-
-              width: {
-                xs: 6,
-                sm: 7,
-                md: 8,
-              },
-
-              height: {
-                xs: 6,
-                sm: 7,
-                md: 8,
-              },
-
-              transform:
-                "translateX(-50%)",
-
-              borderRadius: "50%",
-
-              background:
-                "radial-gradient(circle, #fff8d8 0%, #d6b56d 42%, rgba(214,181,109,.15) 72%, transparent 100%)",
-
-              boxShadow:
-                "0 0 8px rgba(214,181,109,.95), 0 0 20px rgba(214,181,109,.55), 0 0 35px rgba(214,181,109,.25)",
-
-              zIndex: 4,
-
-              animation:
-                scrollDirection ===
-                "down"
-                  ? "indicatorMoveDown .8s cubic-bezier(.22,.61,.36,1) forwards"
-                  : "indicatorMoveUp .8s cubic-bezier(.22,.61,.36,1) forwards",
-            }}
-          />
-        </Box>
-      )}
-
-      {/* =====================================================
-          TOP BAR
-      ===================================================== */}
+      {/* TOP HEADER */}
 
       <Box
         sx={{
           position: "absolute",
-
           top: 0,
           left: 0,
           right: 0,
-
-          minHeight: {
-            xs: 65,
-            sm: 74,
-            md: 82,
-          },
-
+          zIndex: 20,
           display: "flex",
-
-          alignItems: "center",
-
-          justifyContent:
-            "space-between",
-
-          px: {
-            xs: 1,
-            sm: 2,
-            md: 3,
-          },
-
-          py: 1,
-
-          background:
-            "linear-gradient(180deg, rgba(0,0,0,.92), rgba(0,0,0,.40), transparent)",
-
-          zIndex: 30,
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 1,
+          pointerEvents: "none",
         }}
       >
-        {/* LEFT TITLE */}
+        {/* LEFT PANEL: COMPACT BRAND AND TITLE */}
 
         <Box
           sx={{
+            pointerEvents: "auto",
             display: "flex",
-
             alignItems: "center",
-
-            gap: .8,
-
-            px: {
-              xs: 1.4,
-              sm: 2,
-            },
-
-            py: {
-              xs: .65,
-              sm: .8,
-            },
-
-            borderRadius: "50px",
-
-            background:
-              "rgba(12,12,13,.72)",
-
-            backdropFilter:
-              "blur(20px)",
-
-            border:
-              "1px solid rgba(255,255,255,.09)",
-
-            maxWidth: {
-              xs: "65%",
-              sm: "70%",
-              md: "60%",
-            },
-
+            gap: { xs: 0.8, sm: 1.2 },
             minWidth: 0,
+            width: "fit-content",
+            maxWidth: { xs: "55%", sm: "42%", md: "35%" },
+            flex: "0 1 auto",
+            p: { xs: 0.7, sm: 1 },
+            borderRadius: "0 0 15px 0",
+            bgcolor: "rgba(10,12,19,0.90)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            borderRight: "1px solid rgba(216,180,106,0.25)",
+            borderBottom: "1px solid rgba(216,180,106,0.25)",
+            boxShadow: "0 6px 20px rgba(0,0,0,0.22)",
           }}
         >
-          <MenuBook
-            sx={{
-              flexShrink: 0,
-
-              fontSize: {
-                xs: 17,
-                sm: 19,
-              },
-
-              color: "#d6b56d",
-
-              filter:
-                "drop-shadow(0 0 8px rgba(214,181,109,.45))",
-            }}
-          />
-
           <Box
             sx={{
-              minWidth: 0,
+              width: { xs: 32, sm: 38 },
+              height: { xs: 32, sm: 38 },
+              flexShrink: 0,
+              display: "grid",
+              placeItems: "center",
+              borderRadius: "10px",
+              color: "#E2C17C",
+              bgcolor: "#211C14",
+              border: "1px solid rgba(216,180,106,0.3)",
             }}
           >
+            <MenuBook sx={{ fontSize: { xs: 18, sm: 21 } }} />
+          </Box>
+
+          <Box sx={{ minWidth: 0, flex: 1 }}>
             <Typography
               sx={{
-                fontSize: {
-                  xs: 11.5,
-                  sm: 13.5,
-                  md: 15,
-                },
+                fontSize: { xs: 8, sm: 9 },
+                fontWeight: 800,
+                letterSpacing: { xs: 0.8, sm: 1.5 },
+                color: "#D8B46A",
+                lineHeight: 1.3,
+              }}
+            >
+              GOLDEN DREAMS
+            </Typography>
 
-                fontWeight: 700,
-
-                letterSpacing: .5,
-
-                overflow: "hidden",
-
-                textOverflow:
-                  "ellipsis",
-
-                whiteSpace:
-                  "nowrap",
+            <Typography
+              title={currentHeading}
+              noWrap
+              sx={{
+                mt: 0.3,
+                fontSize: { xs: 10, sm: 12 },
+                fontWeight: 600,
+                color: "#F8F0DF",
+                lineHeight: 1.4,
               }}
             >
               {currentHeading}
             </Typography>
-
-            <Typography
-              sx={{
-                display: {
-                  xs: "none",
-                  sm: "block",
-                },
-
-                fontSize: 9,
-
-                color:
-                  "rgba(255,255,255,.40)",
-
-                letterSpacing: 1,
-              }}
-            >
-              DIGITAL ALBUM
-            </Typography>
           </Box>
         </Box>
 
-        {/* RIGHT CONTROLS */}
+        {/* RIGHT PANEL: ALBUM MENU AND FULLSCREEN */}
 
         <Box
+          ref={menuContainerRef}
           sx={{
+            position: "relative",
+            pointerEvents: "auto",
             display: "flex",
-
-            gap: .6,
-
             alignItems: "center",
-
+            gap: { xs: 0.7, sm: 1 },
             flexShrink: 0,
+            p: { xs: 0.7, sm: 1 },
+            borderRadius: "0 0 0 15px",
+            bgcolor: "rgba(10,12,19,0.90)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            borderLeft: "1px solid rgba(216,180,106,0.25)",
+            borderBottom: "1px solid rgba(216,180,106,0.25)",
+            boxShadow: "0 6px 20px rgba(0,0,0,0.22)",
           }}
         >
-          {/* FULLSCREEN */}
+          {/* ALBUM MENU */}
+
+          {data.length > 1 && (
+            <Box>
+              <Tooltip title="Choose an album">
+                <Box
+                  component="button"
+                  type="button"
+                  aria-haspopup="true"
+                  aria-expanded={albumMenuOpen}
+                  onClick={() =>
+                    setAlbumMenuOpen((open) => !open)
+                  }
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: { xs: 0.3, sm: 0.8 },
+                    minHeight: { xs: 36, sm: 40 },
+                    px: { xs: 0.9, sm: 1.4 },
+                    borderRadius: "11px",
+                    color: "#E8CC91",
+                    bgcolor: albumMenuOpen
+                      ? "rgba(216,180,106,0.18)"
+                      : "rgba(216,180,106,0.07)",
+                    border: "1px solid rgba(216,180,106,0.32)",
+                    fontFamily: "inherit",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    "&:hover": {
+                      bgcolor: "rgba(216,180,106,0.17)",
+                    },
+                  }}
+                >
+                  <MenuBook sx={{ fontSize: 19 }} />
+
+                  <Box
+                    component="span"
+                    sx={{
+                      display: { xs: "none", sm: "inline" },
+                    }}
+                  >
+                    ALBUMS
+                  </Box>
+
+                  <KeyboardArrowDown
+                    sx={{
+                      fontSize: 19,
+                      transition: "transform .2s",
+                      transform: albumMenuOpen
+                        ? "rotate(180deg)"
+                        : "rotate(0deg)",
+                    }}
+                  />
+                </Box>
+              </Tooltip>
+
+              {/* CUSTOM DROPDOWN */}
+
+              {albumMenuOpen && (
+                <Box
+                  role="menu"
+                  sx={{
+                    position: "absolute",
+                    top: "calc(100% + 8px)",
+                    right: 8,
+                    zIndex: 1000,
+                    width: { xs: 260, sm: 310 },
+                    maxWidth: "calc(100vw - 20px)",
+                    maxHeight: "min(65dvh, 500px)",
+                    overflowY: "auto",
+                    overscrollBehavior: "contain",
+                    borderRadius: "16px",
+                    p: 1,
+                    bgcolor: "#11141D",
+                    border: "1px solid rgba(216,180,106,0.32)",
+                    boxShadow: "0 18px 55px rgba(0,0,0,0.65)",
+                    scrollbarWidth: "thin",
+                    scrollbarColor: "#6C5934 #11141D",
+                  }}
+                >
+                  <Box sx={{ px: 1.3, py: 1.2 }}>
+                    <Typography
+                      sx={{
+                        color: "#D8B46A",
+                        fontSize: 10,
+                        fontWeight: 800,
+                        letterSpacing: 2,
+                      }}
+                    >
+                      YOUR COLLECTION
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        mt: 0.5,
+                        color: "#8F94A3",
+                        fontSize: 11,
+                      }}
+                    >
+                      Choose an album to continue
+                    </Typography>
+                  </Box>
+
+                  {data.map((item, index) => {
+                    const active = selectedIndex === index;
+
+                    return (
+                      <Box
+                        key={`${item.heading1}-${index}`}
+                        component="button"
+                        type="button"
+                        role="menuitem"
+                        onClick={() => selectAlbum(index)}
+                        sx={{
+                          width: "100%",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1.2,
+                          p: 1.2,
+                          mb: 0.5,
+                          textAlign: "left",
+                          border: active
+                            ? "1px solid rgba(216,180,106,0.32)"
+                            : "1px solid transparent",
+                          borderRadius: "12px",
+                          color: "#F8F0DF",
+                          bgcolor: active
+                            ? "rgba(216,180,106,0.12)"
+                            : "transparent",
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                          "&:hover": {
+                            bgcolor: "rgba(216,180,106,0.12)",
+                          },
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width: 36,
+                            height: 36,
+                            flexShrink: 0,
+                            display: "grid",
+                            placeItems: "center",
+                            borderRadius: "10px",
+                            color: "#E2C17C",
+                            bgcolor: "#211C14",
+                          }}
+                        >
+                          <MenuBook sx={{ fontSize: 19 }} />
+                        </Box>
+
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography
+                            sx={{
+                              fontSize: 12,
+                              fontWeight: active ? 700 : 500,
+                              lineHeight: 1.5,
+                              overflowWrap: "anywhere",
+                              color: active
+                                ? "#E6C780"
+                                : "#E4E5EA",
+                            }}
+                          >
+                            {item.heading1}
+                          </Typography>
+
+                          <Typography
+                            sx={{
+                              mt: 0.3,
+                              fontSize: 10,
+                              color: "#858A99",
+                            }}
+                          >
+                            Album {String(index + 1).padStart(2, "0")}
+                          </Typography>
+                        </Box>
+
+                        {active && (
+                          <Check
+                            sx={{
+                              fontSize: 19,
+                              color: "#D8B46A",
+                              flexShrink: 0,
+                            }}
+                          />
+                        )}
+                      </Box>
+                    );
+                  })}
+                </Box>
+              )}
+            </Box>
+          )}
+
+          {/* FULLSCREEN BUTTON */}
 
           <Tooltip
-            title={
-              fullscreen
-                ? "Exit fullscreen"
-                : "Fullscreen"
-            }
+            title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
           >
             <IconButton
-              onClick={
-                toggleFullscreen
-              }
+              onClick={toggleFullscreen}
+              aria-label="Toggle fullscreen"
               sx={{
-                width: {
-                  xs: 42,
-                  sm: 46,
-                },
-
-                height: {
-                  xs: 42,
-                  sm: 46,
-                },
-
-                color: "#fff",
-
-                background:
-                  "rgba(255,255,255,.065)",
-
-                border:
-                  "1px solid rgba(255,255,255,.12)",
-
-                backdropFilter:
-                  "blur(18px)",
-
+                width: { xs: 36, sm: 40 },
+                height: { xs: 36, sm: 40 },
+                flexShrink: 0,
+                borderRadius: "11px",
+                color: "#E6C780",
+                bgcolor: "rgba(255,255,255,0.045)",
+                border: "1px solid rgba(255,255,255,0.12)",
                 "&:hover": {
-                  background:
-                    "rgba(255,255,255,.13)",
+                  bgcolor: "rgba(216,180,106,0.13)",
+                  borderColor: "rgba(216,180,106,0.4)",
                 },
               }}
             >
               {fullscreen ? (
-                <CloseFullscreen
-                  sx={{
-                    fontSize: 20,
-                  }}
-                />
+                <CloseFullscreen />
               ) : (
-                <Fullscreen
-                  sx={{
-                    fontSize: 21,
-                  }}
-                />
+                <Fullscreen />
               )}
             </IconButton>
           </Tooltip>
-
-          {/* OPEN PDF */}
-
-          <Tooltip title="Open PDF">
-            <IconButton
-              onClick={openPDF}
-              sx={{
-                width: {
-                  xs: 42,
-                  sm: 46,
-                },
-
-                height: {
-                  xs: 42,
-                  sm: 46,
-                },
-
-                color: "#d6b56d",
-
-                background:
-                  "rgba(214,181,109,.10)",
-
-                border:
-                  "1px solid rgba(214,181,109,.25)",
-
-                backdropFilter:
-                  "blur(18px)",
-
-                "&:hover": {
-                  background:
-                    "rgba(214,181,109,.20)",
-                },
-              }}
-            >
-              <OpenInNew
-                sx={{
-                  fontSize: 19,
-                }}
-              />
-            </IconButton>
-          </Tooltip>
         </Box>
       </Box>
 
-      {/* =====================================================
-          PDF SELECTOR
-      ===================================================== */}
+      {/* SCROLL INDICATOR */}
 
-      {data.length > 1 && (
+      {showScrollIndicator && scrollDirection && (
         <Box
           sx={{
             position: "absolute",
-
-            top: {
-              xs: 68,
-              sm: 77,
-              md: 86,
-            },
-
-            left: "50%",
-
-            transform:
-              "translateX(-50%)",
-
-            width: {
-              xs: "calc(100% - 20px)",
-              sm: "calc(100% - 40px)",
-              md: "auto",
-            },
-
-            maxWidth: "90%",
-
+            left: 12,
+            top: "50%",
+            transform: "translateY(-50%)",
+            zIndex: 10,
+            pointerEvents: "none",
+            width: 34,
+            height: 110,
+            borderRadius: 20,
+            bgcolor: "rgba(10,12,19,0.5)",
+            border: "1px solid rgba(216,180,106,0.16)",
             display: "flex",
-
             alignItems: "center",
-
             justifyContent: "center",
-
-            gap: .7,
-
-            overflowX: "auto",
-
-            px: .5,
-            py: .5,
-
-            zIndex: 40,
-
-            scrollbarWidth: "none",
-
-            "&::-webkit-scrollbar": {
-              display: "none",
-            },
+            color: "#D8B46A",
+            opacity: 0.85,
           }}
         >
-          {data.map(
-            (item, index) => {
-              const active =
-                selectedIndex ===
-                index;
-
-              return (
-                <Box
-                  key={`${item.heading1}-${index}`}
-                  component="button"
-                  type="button"
-                  onClick={() =>
-                    selectPDF(index)
-                  }
-                  sx={{
-                    flexShrink: 0,
-
-                    border: active
-                      ? "1px solid rgba(214,181,109,.55)"
-                      : "1px solid rgba(255,255,255,.10)",
-
-                    background: active
-                      ? "rgba(214,181,109,.16)"
-                      : "rgba(10,10,11,.70)",
-
-                    color: active
-                      ? "#d6b56d"
-                      : "rgba(255,255,255,.65)",
-
-                    borderRadius:
-                      "30px",
-
-                    px: {
-                      xs: 1.5,
-                      sm: 2,
-                    },
-
-                    py: {
-                      xs: .55,
-                      sm: .7,
-                    },
-
-                    fontSize: {
-                      xs: 9.5,
-                      sm: 11,
-                    },
-
-                    fontWeight: active
-                      ? 700
-                      : 500,
-
-                    cursor:
-                      "pointer",
-
-                    backdropFilter:
-                      "blur(18px)",
-
-                    boxShadow: active
-                      ? "0 0 18px rgba(214,181,109,.12)"
-                      : "none",
-
-                    whiteSpace:
-                      "nowrap",
-
-                    maxWidth: {
-                      xs: 150,
-                      sm: 220,
-                    },
-
-                    overflow: "hidden",
-
-                    textOverflow:
-                      "ellipsis",
-
-                    "&:hover": {
-                      borderColor:
-                        "rgba(214,181,109,.45)",
-
-                      color:
-                        "#d6b56d",
-                    },
-                  }}
-                >
-                  {item.heading1}
-                </Box>
-              );
-            }
-          )}
+          <Box
+            sx={{
+              fontSize: 25,
+              animation:
+                "scrollHint .7s ease-in-out infinite alternate",
+            }}
+          >
+            {scrollDirection === "down" ? "↓" : "↑"}
+          </Box>
         </Box>
       )}
 
-      {/* =====================================================
-          BOTTOM LABEL
-      ===================================================== */}
-
-      <Box
-        sx={{
-          position: "absolute",
-
-          left: "50%",
-
-          bottom: {
-            xs: 10,
-            sm: 14,
-            md: 18,
-          },
-
-          transform:
-            "translateX(-50%)",
-
-          px: {
-            xs: 1.5,
-            sm: 2,
-          },
-
-          py: .7,
-
-          borderRadius: "30px",
-
-          background:
-            "rgba(8,8,9,.72)",
-
-          backdropFilter:
-            "blur(18px)",
-
-          border:
-            "1px solid rgba(255,255,255,.08)",
-
-          zIndex: 20,
-
-          opacity: 1,
-
-          pointerEvents:
-            "none",
-
-          whiteSpace:
-            "nowrap",
-        }}
-      >
-        <Typography
-          sx={{
-            fontSize: {
-              xs: 8,
-              sm: 9,
-              md: 10,
-            },
-
-            letterSpacing: {
-              xs: 1,
-              sm: 1.5,
-            },
-
-            color:
-              "rgba(255,255,255,.42)",
-
-            textTransform:
-              "uppercase",
-          }}
-        >
-          Scroll to explore
-        </Typography>
-      </Box>
-
-      {/* =====================================================
-          ANIMATIONS
-      ===================================================== */}
+      {/* ANIMATIONS */}
 
       <style>
         {`
-
-          @keyframes loginPdfDot {
-
-            0%,
-            100% {
-              opacity: .25;
-              transform: translateY(0);
-            }
-
-            50% {
-              opacity: 1;
-              transform: translateY(-5px);
-            }
+          @keyframes scrollHint {
+            from { transform: translateY(-4px); }
+            to { transform: translateY(4px); }
           }
-
-
-          @keyframes indicatorMoveDown {
-
-            0% {
-              top: 25%;
-              opacity: 0;
-
-              transform:
-                translateX(-50%)
-                scale(.45);
-            }
-
-            15% {
-              opacity: 1;
-            }
-
-            50% {
-              transform:
-                translateX(-50%)
-                scale(1);
-            }
-
-            82% {
-              opacity: 1;
-            }
-
-            100% {
-              top: 75%;
-              opacity: 0;
-
-              transform:
-                translateX(-50%)
-                scale(1.15);
-            }
-          }
-
-
-          @keyframes indicatorMoveUp {
-
-            0% {
-              top: 75%;
-              opacity: 0;
-
-              transform:
-                translateX(-50%)
-                scale(.45);
-            }
-
-            15% {
-              opacity: 1;
-            }
-
-            50% {
-              transform:
-                translateX(-50%)
-                scale(1);
-            }
-
-            82% {
-              opacity: 1;
-            }
-
-            100% {
-              top: 25%;
-              opacity: 0;
-
-              transform:
-                translateX(-50%)
-                scale(1.15);
-            }
-          }
-
-
-          @keyframes indicatorArrowUp {
-
-            0%,
-            100% {
-              transform:
-                translateX(-50%)
-                translateY(2px);
-
-              opacity: .45;
-            }
-
-            50% {
-              transform:
-                translateX(-50%)
-                translateY(-4px);
-
-              opacity: 1;
-            }
-          }
-
-
-          @keyframes indicatorArrowDown {
-
-            0%,
-            100% {
-              transform:
-                translateX(-50%)
-                translateY(-2px);
-
-              opacity: .45;
-            }
-
-            50% {
-              transform:
-                translateX(-50%)
-                translateY(4px);
-
-              opacity: 1;
-            }
-          }
-
-
-          @media (max-width: 600px) {
-
-            #golden-dreams-viewer iframe {
-              touch-action: pan-y;
-            }
-
-          }
-
 
           @media (prefers-reduced-motion: reduce) {
-
             * {
               animation-duration: 0.01ms !important;
               transition-duration: 0.01ms !important;
             }
-
           }
-
         `}
       </style>
     </Box>
