@@ -1,9 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   Box,
@@ -20,11 +15,7 @@ import {
   Divider,
 } from "@mui/material";
 
-import {
-  Google,
-  Close,
-  RateReview,
-} from "@mui/icons-material";
+import { Close, RateReview } from "@mui/icons-material";
 
 /* =========================================================
    GOOGLE SHEETS REVIEW API
@@ -47,10 +38,7 @@ const GOOGLE_CLIENT_ID =
 function decodeJwtResponse(token) {
   try {
     const base64Url = token.split(".")[1];
-
-    const base64 = base64Url
-      .replace(/-/g, "+")
-      .replace(/_/g, "/");
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
 
     const jsonPayload = decodeURIComponent(
       window
@@ -58,170 +46,91 @@ function decodeJwtResponse(token) {
         .split("")
         .map(
           (c) =>
-            "%" +
-            ("00" + c.charCodeAt(0).toString(16)).slice(-2)
+            "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)
         )
         .join("")
     );
 
     return JSON.parse(jsonPayload);
   } catch (error) {
-    console.error(
-      "Google JWT decode error:",
-      error
-    );
-
+    console.error("Google JWT decode error:", error);
     return null;
   }
 }
 
 /* =========================================================
-   COMPONENT
+   GOOGLE REVIEW COMPONENT
 ========================================================= */
 
 export default function GoogleReview() {
-  /* =======================================================
-     REVIEWS
-  ======================================================= */
-
   const [reviews, setReviews] = useState([]);
+  const [loadingReviews, setLoadingReviews] = useState(true);
+  const [reviewError, setReviewError] = useState("");
 
-  const [loadingReviews, setLoadingReviews] =
-    useState(true);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [dialogStep, setDialogStep] = useState("login");
 
-  const [reviewError, setReviewError] =
-    useState("");
+  const [googleUser, setGoogleUser] = useState(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
-  /* =======================================================
-     DIALOG
-  ======================================================= */
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState("");
+  const [submitError, setSubmitError] = useState("");
 
-  const [openDialog, setOpenDialog] =
-    useState(false);
-
-  const [dialogStep, setDialogStep] =
-    useState("login");
-
-  /* =======================================================
-     GOOGLE USER
-  ======================================================= */
-
-  const [googleUser, setGoogleUser] =
-    useState(null);
-
-  const [googleLoading, setGoogleLoading] =
-    useState(false);
-
-  /* =======================================================
-     FORM
-  ======================================================= */
-
-  const [rating, setRating] =
-    useState(0);
-
-  const [comment, setComment] =
-    useState("");
-
-  const [submitting, setSubmitting] =
-    useState(false);
-
-  const [submitMessage, setSubmitMessage] =
-    useState("");
-
-  const [submitError, setSubmitError] =
-    useState("");
-
-  /* =======================================================
-     CAROUSEL
-  ======================================================= */
-
-  const reviewSliderRef =
-    useRef(null);
-
-  const [activeIndex, setActiveIndex] =
-    useState(0);
+  const reviewSliderRef = useRef(null);
+  const [activeIndex, setActiveIndex] = useState(0);
 
   /* =======================================================
      FETCH REVIEWS
   ======================================================= */
 
-  const fetchReviews = useCallback(
-    async () => {
-      try {
-        setLoadingReviews(true);
-        setReviewError("");
+  const fetchReviews = useCallback(async () => {
+    try {
+      setLoadingReviews(true);
+      setReviewError("");
 
-        const response = await fetch(
-          REVIEW_API,
-          {
-            method: "GET",
-            cache: "no-store",
-          }
-        );
+      const response = await fetch(REVIEW_API, {
+        method: "GET",
+        cache: "no-store",
+      });
 
-        if (!response.ok) {
-          throw new Error(
-            `HTTP error ${response.status}`
-          );
-        }
-
-        const data =
-          await response.json();
-
-        if (data.success) {
-          setReviews(
-            Array.isArray(data.reviews)
-              ? data.reviews
-              : []
-          );
-        } else {
-          throw new Error(
-            data.message ||
-              "Unable to load reviews"
-          );
-        }
-      } catch (error) {
-        console.error(
-          "Review fetch error:",
-          error
-        );
-
-        setReviewError(
-          "Unable to load reviews right now."
-        );
-      } finally {
-        setLoadingReviews(false);
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}`);
       }
-    },
-    []
-  );
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.message || "Unable to load reviews");
+      }
+
+      setReviews(Array.isArray(data.reviews) ? data.reviews : []);
+    } catch (error) {
+      console.error("Review fetch error:", error);
+      setReviewError("Unable to load reviews right now.");
+    } finally {
+      setLoadingReviews(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchReviews();
   }, [fetchReviews]);
 
   /* =======================================================
-     GOOGLE IDENTITY SCRIPT
+     LOAD GOOGLE IDENTITY SCRIPT
   ======================================================= */
 
   useEffect(() => {
-    if (
-      document.getElementById(
-        "google-identity-script"
-      )
-    ) {
+    if (document.getElementById("google-identity-script")) {
       return;
     }
 
-    const script =
-      document.createElement("script");
-
-    script.id =
-      "google-identity-script";
-
-    script.src =
-      "https://accounts.google.com/gsi/client";
-
+    const script = document.createElement("script");
+    script.id = "google-identity-script";
+    script.src = "https://accounts.google.com/gsi/client";
     script.async = true;
     script.defer = true;
 
@@ -229,151 +138,111 @@ export default function GoogleReview() {
   }, []);
 
   /* =======================================================
-     GOOGLE LOGIN BUTTON
+     GOOGLE SIGN-IN BUTTON
   ======================================================= */
 
   useEffect(() => {
-    if (
-      !openDialog ||
-      dialogStep !== "login"
-    ) {
+    if (!openDialog || dialogStep !== "login") {
       return;
     }
 
     let interval;
+    let cancelled = false;
 
     const initializeGoogle = () => {
       if (
-        !window.google ||
-        !window.google.accounts ||
-        !window.google.accounts.id
+        !window.google?.accounts?.id ||
+        cancelled
       ) {
         return false;
       }
 
-      const buttonContainer =
-        document.getElementById(
-          "google-signin-button"
-        );
+      const container = document.getElementById(
+        "google-signin-button"
+      );
 
-      if (!buttonContainer) {
+      if (!container) {
         return false;
       }
 
-      buttonContainer.innerHTML = "";
+      container.innerHTML = "";
 
       window.google.accounts.id.initialize({
-        client_id:
-          GOOGLE_CLIENT_ID,
+        client_id: GOOGLE_CLIENT_ID,
 
         callback: (response) => {
           setGoogleLoading(true);
+          setSubmitError("");
 
-          const user =
-            decodeJwtResponse(
-              response.credential
-            );
+          const user = decodeJwtResponse(response.credential);
 
           if (!user) {
             setGoogleLoading(false);
-
-            setSubmitError(
-              "Unable to sign in with Google."
-            );
-
+            setSubmitError("Unable to sign in with Google.");
             return;
           }
 
-          const userData = {
-            name:
-              user.name ||
-              user.given_name ||
-              "Google User",
-
-            email:
-              user.email || "",
-
-            photo:
-              user.picture || "",
-
-            googleId:
-              user.sub || "",
-          };
-
-          setGoogleUser(userData);
+          setGoogleUser({
+            name: user.name || user.given_name || "Google User",
+            email: user.email || "",
+            photo: user.picture || "",
+            googleId: user.sub || "",
+          });
 
           setGoogleLoading(false);
-
-          setSubmitError("");
-          setSubmitMessage("");
-
           setDialogStep("profile");
         },
       });
 
-      window.google.accounts.id.renderButton(
-        buttonContainer,
-        {
-          theme: "filled_black",
-          size: "large",
-          shape: "rectangular",
-          width: 320,
-          text: "continue_with",
-        }
-      );
+      window.google.accounts.id.renderButton(container, {
+        theme: "filled_black",
+        size: "large",
+        shape: "rectangular",
+        width: 320,
+        text: "continue_with",
+      });
 
       return true;
     };
 
     if (!initializeGoogle()) {
-      interval = setInterval(() => {
+      interval = window.setInterval(() => {
         if (initializeGoogle()) {
-          clearInterval(interval);
+          window.clearInterval(interval);
         }
       }, 300);
     }
 
     return () => {
+      cancelled = true;
+
       if (interval) {
-        clearInterval(interval);
+        window.clearInterval(interval);
       }
     };
-  }, [
-    openDialog,
-    dialogStep,
-  ]);
+  }, [openDialog, dialogStep]);
 
   /* =======================================================
-     OPEN REVIEW
+     OPEN REVIEW DIALOG
   ======================================================= */
 
   const handleOpenReview = () => {
     setSubmitMessage("");
     setSubmitError("");
-
     setRating(0);
     setComment("");
-
-    if (googleUser) {
-      setDialogStep("profile");
-    } else {
-      setDialogStep("login");
-    }
-
+    setDialogStep(googleUser ? "profile" : "login");
     setOpenDialog(true);
   };
 
   /* =======================================================
-     CLOSE DIALOG
+     CLOSE REVIEW DIALOG
   ======================================================= */
 
   const handleCloseDialog = () => {
-    if (submitting) {
-      return;
-    }
+    if (submitting) return;
 
     setOpenDialog(false);
-
     setSubmitError("");
     setSubmitMessage("");
   };
@@ -387,28 +256,18 @@ export default function GoogleReview() {
     setSubmitMessage("");
 
     if (!googleUser) {
-      setSubmitError(
-        "Please sign in with Google first."
-      );
-
+      setSubmitError("Please sign in with Google first.");
       setDialogStep("login");
-
       return;
     }
 
     if (!rating) {
-      setSubmitError(
-        "Please select a star rating."
-      );
-
+      setSubmitError("Please select a star rating.");
       return;
     }
 
     if (!comment.trim()) {
-      setSubmitError(
-        "Please write your review."
-      );
-
+      setSubmitError("Please write your review.");
       return;
     }
 
@@ -421,42 +280,29 @@ export default function GoogleReview() {
         rating: Number(rating),
         review: comment.trim(),
         photo: googleUser.photo,
-        googleId:
-          googleUser.googleId,
+        googleId: googleUser.googleId,
       };
 
-      const response =
-        await fetch(REVIEW_API, {
-          method: "POST",
-
-          headers: {
-            "Content-Type":
-              "text/plain;charset=utf-8",
-          },
-
-          body: JSON.stringify(
-            reviewData
-          ),
-        });
+      const response = await fetch(REVIEW_API, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8",
+        },
+        body: JSON.stringify(reviewData),
+      });
 
       if (!response.ok) {
-        throw new Error(
-          `HTTP error ${response.status}`
-        );
+        throw new Error(`HTTP error ${response.status}`);
       }
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       if (!data.success) {
-        throw new Error(
-          data.message ||
-            "Review submission failed"
-        );
+        throw new Error(data.message || "Review submission failed");
       }
 
       setSubmitMessage(
-        "Thank you! Your review has been submitted and is now visible."
+        "Thank you! Your review has been submitted."
       );
 
       setRating(0);
@@ -464,16 +310,12 @@ export default function GoogleReview() {
 
       await fetchReviews();
 
-      setTimeout(() => {
+      window.setTimeout(() => {
         setOpenDialog(false);
         setSubmitMessage("");
       }, 1800);
     } catch (error) {
-      console.error(
-        "Review submission error:",
-        error
-      );
-
+      console.error("Review submission error:", error);
       setSubmitError(
         "Unable to submit your review. Please try again."
       );
@@ -483,340 +325,80 @@ export default function GoogleReview() {
   };
 
   /* =======================================================
-     CENTER REVIEW
+     UPDATE ACTIVE CARD ONLY
+     IMPORTANT: This does not move or recenter the carousel.
   ======================================================= */
 
-  const centerReview = useCallback(
-    (index, smooth = true) => {
-      const slider =
-        reviewSliderRef.current;
+  useEffect(() => {
+    const slider = reviewSliderRef.current;
 
-      if (!slider) {
-        return;
-      }
+    if (!slider || reviews.length === 0) {
+      return;
+    }
 
-      const cards =
-        slider.querySelectorAll(
-          "[data-review-card]"
-        );
+    let animationFrame = null;
 
-      const card = cards[index];
+    const updateActiveCard = () => {
+      animationFrame = null;
 
-      if (!card) {
-        return;
-      }
+      const sliderRect = slider.getBoundingClientRect();
+      const sliderCenter = sliderRect.left + sliderRect.width / 2;
 
-      /*
-        Calculate the exact distance required
-        to put the selected card in the
-        center of the slider.
-      */
-
-      const sliderRect =
-        slider.getBoundingClientRect();
-
-      const cardRect =
-        card.getBoundingClientRect();
-
-      const sliderCenter =
-        sliderRect.left +
-        sliderRect.width / 2;
-
-      const cardCenter =
-        cardRect.left +
-        cardRect.width / 2;
-
-      const distance =
-        cardCenter -
-        sliderCenter;
-
-      slider.scrollBy({
-        left: distance,
-        behavior: smooth
-          ? "smooth"
-          : "auto",
-      });
-
-      setActiveIndex(index);
-    },
-    []
-  );
-
-  /* =======================================================
-     DETECT CENTER CARD
-  ======================================================= */
-
-  const updateActiveIndex =
-    useCallback(() => {
-      const slider =
-        reviewSliderRef.current;
-
-      if (!slider) {
-        return;
-      }
-
-      const cards =
-        slider.querySelectorAll(
-          "[data-review-card]"
-        );
-
-      if (!cards.length) {
-        return;
-      }
-
-      const sliderRect =
-        slider.getBoundingClientRect();
-
-      const sliderCenter =
-        sliderRect.left +
-        sliderRect.width / 2;
+      const cards = slider.querySelectorAll("[data-review-card]");
 
       let closestIndex = 0;
+      let closestDistance = Infinity;
 
-      let closestDistance =
-        Infinity;
+      cards.forEach((card, index) => {
+        const rect = card.getBoundingClientRect();
+        const cardCenter = rect.left + rect.width / 2;
+        const distance = Math.abs(cardCenter - sliderCenter);
 
-      cards.forEach(
-        (card, index) => {
-          const rect =
-            card.getBoundingClientRect();
-
-          const cardCenter =
-            rect.left +
-            rect.width / 2;
-
-          const distance =
-            Math.abs(
-              cardCenter -
-                sliderCenter
-            );
-
-          if (
-            distance <
-            closestDistance
-          ) {
-            closestDistance =
-              distance;
-
-            closestIndex =
-              index;
-          }
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = index;
         }
+      });
+
+      setActiveIndex((previousIndex) =>
+        previousIndex === closestIndex ? previousIndex : closestIndex
       );
-
-      setActiveIndex(
-        closestIndex
-      );
-    }, []);
-
-  /* =======================================================
-     SCROLL EVENT
-  ======================================================= */
-
-  useEffect(() => {
-    const slider =
-      reviewSliderRef.current;
-
-    if (!slider) {
-      return;
-    }
-
-    let scrollTimer;
+    };
 
     const handleScroll = () => {
-      updateActiveIndex();
+      if (animationFrame !== null) {
+        return;
+      }
 
-      clearTimeout(
-        scrollTimer
-      );
-
-      /*
-        After scrolling stops,
-        precisely center the nearest card.
-      */
-
-      scrollTimer = setTimeout(() => {
-        const cards =
-          slider.querySelectorAll(
-            "[data-review-card]"
-          );
-
-        if (!cards.length) {
-          return;
-        }
-
-        const sliderRect =
-          slider.getBoundingClientRect();
-
-        const sliderCenter =
-          sliderRect.left +
-          sliderRect.width / 2;
-
-        let closestIndex = 0;
-
-        let closestDistance =
-          Infinity;
-
-        cards.forEach(
-          (card, index) => {
-            const rect =
-              card.getBoundingClientRect();
-
-            const cardCenter =
-              rect.left +
-              rect.width / 2;
-
-            const distance =
-              Math.abs(
-                cardCenter -
-                  sliderCenter
-              );
-
-            if (
-              distance <
-              closestDistance
-            ) {
-              closestDistance =
-                distance;
-
-              closestIndex =
-                index;
-            }
-          }
-        );
-
-        centerReview(
-          closestIndex,
-          true
-        );
-      }, 160);
+      animationFrame = window.requestAnimationFrame(updateActiveCard);
     };
 
-    slider.addEventListener(
-      "scroll",
-      handleScroll,
-      {
-        passive: true,
-      }
-    );
+    slider.addEventListener("scroll", handleScroll, {
+      passive: true,
+    });
+
+    updateActiveCard();
 
     return () => {
-      slider.removeEventListener(
-        "scroll",
-        handleScroll
-      );
+      slider.removeEventListener("scroll", handleScroll);
 
-      clearTimeout(
-        scrollTimer
-      );
-    };
-  }, [
-    reviews,
-    updateActiveIndex,
-    centerReview,
-  ]);
-
-  /* =======================================================
-     INITIAL CENTER
-  ======================================================= */
-
-  useEffect(() => {
-    if (!reviews.length) {
-      return;
-    }
-
-    const timer =
-      setTimeout(() => {
-        centerReview(
-          0,
-          false
-        );
-      }, 300);
-
-    return () =>
-      clearTimeout(timer);
-  }, [
-    reviews,
-    centerReview,
-  ]);
-
-  /* =======================================================
-     RESIZE
-  ======================================================= */
-
-  useEffect(() => {
-    const handleResize = () => {
-      setTimeout(() => {
-        centerReview(
-          activeIndex,
-          false
-        );
-      }, 150);
-    };
-
-    window.addEventListener(
-      "resize",
-      handleResize
-    );
-
-    return () => {
-      window.removeEventListener(
-        "resize",
-        handleResize
-      );
-    };
-  }, [
-    activeIndex,
-    centerReview,
-  ]);
-
-  /* =======================================================
-     MOUSE WHEEL
-  ======================================================= */
-
-  useEffect(() => {
-    const slider =
-      reviewSliderRef.current;
-
-    if (!slider) {
-      return;
-    }
-
-    const handleWheel = (
-      event
-    ) => {
-      /*
-        Normal mouse wheel:
-        vertical movement becomes
-        horizontal carousel movement.
-      */
-
-      if (
-        Math.abs(event.deltaY) >
-        Math.abs(event.deltaX)
-      ) {
-        event.preventDefault();
-
-        slider.scrollLeft +=
-          event.deltaY;
+      if (animationFrame !== null) {
+        window.cancelAnimationFrame(animationFrame);
       }
-    };
-
-    slider.addEventListener(
-      "wheel",
-      handleWheel,
-      {
-        passive: false,
-      }
-    );
-
-    return () => {
-      slider.removeEventListener(
-        "wheel",
-        handleWheel
-      );
     };
   }, [reviews]);
+
+  /* =======================================================
+     CARD WIDTHS
+  ======================================================= */
+
+  const cardWidth = {
+    xs: "80%",
+    sm: "62%",
+    md: "55%",
+    lg: "48%",
+    xl: "45%",
+  };
 
   /* =======================================================
      RENDER
@@ -826,41 +408,25 @@ export default function GoogleReview() {
     <Box
       sx={{
         width: "100%",
-        py: {
-          xs: 5,
-          sm: 6,
-          md: 8,
-        },
-        overflow: "hidden",
+        py: { xs: 5, sm: 6, md: 8 },
+        overflowX: "clip",
+        boxSizing: "border-box",
       }}
     >
-      {/* ===================================================
-          HEADER
-      =================================================== */}
+      {/* SECTION HEADER */}
 
       <Box
         sx={{
           textAlign: "center",
-          mb: {
-            xs: 3,
-            sm: 4,
-            md: 5,
-          },
+          mb: { xs: 3, sm: 4, md: 5 },
           px: 2,
         }}
       >
         <Typography
           sx={{
             color: "#FFD700",
-
-            fontSize: {
-              xs: "1.8rem",
-              sm: "2.2rem",
-              md: "2.7rem",
-            },
-
+            fontSize: { xs: "1.8rem", sm: "2.2rem", md: "2.7rem" },
             fontWeight: 700,
-
             letterSpacing: 0.5,
           }}
         >
@@ -870,650 +436,296 @@ export default function GoogleReview() {
         <Typography
           sx={{
             mt: 1,
-
-            color:
-              "rgba(255,255,255,0.65)",
-
-            fontSize: {
-              xs: "0.9rem",
-              sm: "1rem",
-            },
+            color: "rgba(255,255,255,0.65)",
+            fontSize: { xs: "0.9rem", sm: "1rem" },
           }}
         >
-          Real experiences from our
-          customers
+          Real experiences from our customers
         </Typography>
       </Box>
 
-      {/* ===================================================
-          LOADING
-      =================================================== */}
+      {/* LOADING */}
 
       {loadingReviews && (
         <Box
           sx={{
             minHeight: 220,
-
             display: "flex",
-
-            justifyContent:
-              "center",
-
-            alignItems:
-              "center",
+            justifyContent: "center",
+            alignItems: "center",
           }}
         >
-          <CircularProgress
-            size={35}
-            sx={{
-              color: "#FFD700",
-            }}
-          />
+          <CircularProgress sx={{ color: "#FFD700" }} />
         </Box>
       )}
 
-      {/* ===================================================
-          ERROR
-      =================================================== */}
+      {/* ERROR */}
 
-      {!loadingReviews &&
-        reviewError && (
-          <Box
-            sx={{
-              maxWidth: 600,
-              mx: "auto",
-              px: 2,
-            }}
+      {!loadingReviews && reviewError && (
+        <Box sx={{ maxWidth: 600, mx: "auto", px: 2 }}>
+          <Alert severity="error">{reviewError}</Alert>
+
+          <Button
+            onClick={fetchReviews}
+            sx={{ mt: 2, color: "#FFD700" }}
           >
-            <Alert severity="error">
-              {reviewError}
-            </Alert>
-          </Box>
-        )}
+            Try Again
+          </Button>
+        </Box>
+      )}
 
-      {/* ===================================================
-          REVIEW CAROUSEL
-      =================================================== */}
+      {/* REVIEW CAROUSEL */}
 
-      {!loadingReviews &&
-        !reviewError &&
-        reviews.length > 0 && (
+      {!loadingReviews && !reviewError && reviews.length > 0 && (
+        <Box sx={{ width: "100%", overflow: "hidden" }}>
           <Box
+            ref={reviewSliderRef}
             sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: { xs: 2, sm: 2.5, md: 3 },
               width: "100%",
-              overflow: "hidden",
+              boxSizing: "border-box",
+
+              overflowX: "auto",
+              overflowY: "hidden",
+
+              /*
+               * Do not intercept the mouse wheel.
+               * No auto-centering, timer or forced snapping.
+               */
+
+              scrollBehavior: "auto",
+              scrollSnapType: "x proximity",
+
+              px: {
+                xs: "10%",
+                sm: "19%",
+                md: "22.5%",
+                lg: "26%",
+                xl: "27.5%",
+              },
+
+              py: { xs: 4, sm: 5, md: 6 },
+
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+
+              "&::-webkit-scrollbar": {
+                display: "none",
+              },
+
+              cursor: "grab",
+              WebkitOverflowScrolling: "touch",
+              touchAction: "pan-x pan-y",
             }}
           >
-            <Box
-              ref={reviewSliderRef}
-              sx={{
-                width: "100%",
+            {reviews.map((review, index) => {
+              const isActive = index === activeIndex;
 
-                display: "flex",
+              return (
+                <Box
+                  key={
+                    review.ID ||
+                    review.GoogleID ||
+                    `${review.Name || "customer"}-${index}`
+                  }
+                  data-review-card
+                  sx={{
+                    width: cardWidth,
+                    minWidth: cardWidth,
+                    flexShrink: 0,
+                    boxSizing: "border-box",
 
-                alignItems:
-                  "center",
+                    minHeight: {
+                      xs: 210,
+                      sm: 230,
+                      md: 245,
+                    },
 
-                gap: {
-                  xs: 2,
-                  sm: 2.5,
-                  md: 3,
-                },
+                    display: "flex",
+                    flexDirection: "column",
+                    alignSelf: "center",
 
-                overflowX: "auto",
+                    p: { xs: 2.2, sm: 3, md: 3.2 },
+                    borderRadius: 3,
 
-                overflowY:
-                  "visible",
+                    background:
+                      "linear-gradient(145deg, rgba(30,30,30,0.10), rgba(12,12,12,0.08))",
 
-                /*
-                  Smooth horizontal scrolling
-                */
+                    border: isActive
+                      ? "1px solid rgba(255,215,0,0.85)"
+                      : "1px solid rgba(255,215,0,0.25)",
 
-                scrollBehavior:
-                  "smooth",
+                    boxShadow: "none",
 
-                scrollSnapType:
-                  "x mandatory",
+                    transform: isActive
+                      ? "scale(1.02)"
+                      : "scale(0.98)",
 
-                /*
-                  Important:
-                  This makes the browser treat
-                  the center as the snap position.
-                */
+                    opacity: isActive ? 1 : 0.78,
 
-                scrollPaddingInline:
-                  "50%",
+                    transition:
+                      "transform 0.2s ease, opacity 0.2s ease, border-color 0.2s ease",
 
-                scrollbarWidth:
-                  "none",
+                    scrollSnapAlign: "center",
+                  }}
+                >
+                  {/* CUSTOMER */}
 
-                msOverflowStyle:
-                  "none",
-
-                "&::-webkit-scrollbar":
-                  {
-                    display: "none",
-                  },
-
-                /*
-                  Large side padding is required
-                  so first and last cards can
-                  reach the exact center.
-                */
-
-                px: {
-                  xs: "0%",
-                  sm: "19%",
-                  md: "26%",
-                  lg: "29%",
-                  xl: "30%",
-                },
-
-                py: {
-                  xs: 4,
-                  sm: 5,
-                  md: 6,
-                },
-
-                boxSizing:
-                  "border-box",
-
-                cursor: "grab",
-
-                "&:active": {
-                  cursor:
-                    "grabbing",
-                },
-
-                userSelect:
-                  "none",
-
-                WebkitOverflowScrolling:
-                  "touch",
-              }}
-            >
-              {reviews.map(
-                (review, index) => {
-                  const isHero =
-                    index ===
-                    activeIndex;
-
-                  return (
-                    <Box
-                      key={
-                        review.ID ||
-                        review.GoogleID ||
-                        `${review.Name}-${index}`
-                      }
-                      data-review-card
-                      onClick={() =>
-                        centerReview(
-                          index,
-                          true
-                        )
-                      }
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1.5,
+                      mb: 2,
+                      width: "100%",
+                    }}
+                  >
+                    <Avatar
+                      src={review.Photo || ""}
+                      alt={review.Name || "Customer"}
                       sx={{
-                        /*
-                          =================================
-                          CARD WIDTH
-                        =================================
-                        */
-
-                        width: {
-                          xs: "100%",
-                          sm: "62%",
-                          md: "48%",
-                          lg: "42%",
-                          xl: "40%",
-                        },
-
-                        minWidth: {
-                          xs: "100%",
-                          sm: "62%",
-                          md: "48%",
-                          lg: "42%",
-                          xl: "40%",
-                        },
-
-                        /*
-                          =================================
-                          AUTOMATIC HEIGHT
-                        =================================
-                        */
-
-                        height: "auto",
-
-                        minHeight: {
-                          xs: 200,
-                          sm: 215,
-                          md: 225,
-                        },
-
-                        alignSelf:
-                          "center",
-
-                        display:
-                          "flex",
-
-                        flexDirection:
-                          "column",
-
-                        p: {
-                          xs: 2.2,
-                          sm: 2.5,
-                          md: 2.8,
-                        },
-
-                        borderRadius: 3,
-
-                        /*
-                          =================================
-                          90% TRANSPARENT BACKGROUND
-                          =================================
-
-                          The background is mostly
-                          transparent so the page
-                          background remains visible.
-                        */
-
-                        background:
-                          isHero
-                            ? "linear-gradient(145deg, rgba(30,30,30,0.10), rgba(12,12,12,0.08))"
-                            : "linear-gradient(145deg, rgba(30,30,30,0.08), rgba(12,12,12,0.06))",
-
-                        /*
-                          NO SHADOW
-                        */
-
-                        boxShadow:
-                          "none",
-
-                        /*
-                          GOLD BORDER
-                        */
-
-                        border:
-                          isHero
-                            ? "1px solid rgba(255,215,0,0.85)"
-                            : "1px solid rgba(255,215,0,0.22)",
-
-                        /*
-                          HERO EFFECT
-                        */
-
-                        transform:
-                          isHero
-                            ? "scale(1.08)"
-                            : "scale(0.93)",
-
-                        opacity:
-                          isHero
-                            ? 1
-                            : 0.58,
-
-                        transition:
-                          "transform 0.35s ease, opacity 0.35s ease, border-color 0.35s ease",
-
-                        boxSizing:
-                          "border-box",
-
-                        textAlign:
-                          "left",
-
-                        zIndex:
-                          isHero
-                            ? 5
-                            : 1,
-
+                        width: { xs: 48, sm: 54 },
+                        height: { xs: 48, sm: 54 },
                         flexShrink: 0,
-
-                        scrollSnapAlign:
-                          "center",
-
-                        scrollSnapStop:
-                          "always",
-
-                        cursor:
-                          "pointer",
-
-                        /*
-                          Keep the hero visually
-                          above neighboring cards.
-                        */
-
-                        position:
-                          "relative",
-
-                        "&:hover": {
-                          opacity: 1,
-
-                          borderColor:
-                            "rgba(255,215,0,0.65)",
-                        },
+                        border: "2px solid rgba(255,215,0,0.75)",
+                        background: "rgba(0,0,0,0.15)",
+                        color: "#FFD700",
                       }}
                     >
-                      {/* =================================
-                          PROFILE
-                      ================================= */}
+                      {String(review.Name || "C")
+                        .charAt(0)
+                        .toUpperCase()}
+                    </Avatar>
 
-                      <Box
-                        sx={{
-                          display:
-                            "flex",
-
-                          alignItems:
-                            "center",
-
-                          justifyContent:
-                            "flex-start",
-
-                          gap: {
-                            xs: 1.2,
-                            sm: 1.5,
-                          },
-
-                          mb: 2,
-
-                          width:
-                            "100%",
-
-                          textAlign:
-                            "left",
-                        }}
-                      >
-                        <Avatar
-                          src={
-                            review.Photo ||
-                            ""
-                          }
-                          alt={
-                            review.Name ||
-                            "Customer"
-                          }
-                          sx={{
-                            width: {
-                              xs: 48,
-                              sm: 54,
-                            },
-
-                            height: {
-                              xs: 48,
-                              sm: 54,
-                            },
-
-                            flexShrink: 0,
-
-                            border:
-                              "2px solid rgba(255,215,0,0.75)",
-
-                            background:
-                              "rgba(0,0,0,0.15)",
-
-                            color:
-                              "#FFD700",
-                          }}
-                        >
-                          {String(
-                            review.Name ||
-                              "C"
-                          )
-                            .charAt(0)
-                            .toUpperCase()}
-                        </Avatar>
-
-                        <Box
-                          sx={{
-                            minWidth: 0,
-
-                            display:
-                              "flex",
-
-                            flexDirection:
-                              "column",
-
-                            alignItems:
-                              "flex-start",
-
-                            justifyContent:
-                              "center",
-
-                            gap: 0.2,
-
-                            textAlign:
-                              "left",
-                          }}
-                        >
-                          <Typography
-                            sx={{
-                              color:
-                                "#fff",
-
-                              fontWeight:
-                                600,
-
-                              fontSize: {
-                                xs: "0.95rem",
-                                sm: "1rem",
-                              },
-
-                              lineHeight:
-                                1.3,
-
-                              wordBreak:
-                                "break-word",
-                            }}
-                          >
-                            {review.Name ||
-                              "Customer"}
-                          </Typography>
-
-                          <Rating
-                            value={
-                              Number(
-                                review.Rating
-                              ) || 0
-                            }
-                            readOnly
-                            size="small"
-                            sx={{
-                              color:
-                                "#FFD700",
-
-                              "& .MuiRating-iconEmpty":
-                                {
-                                  color:
-                                    "rgba(255,255,255,0.25)",
-                                },
-                            }}
-                          />
-                        </Box>
-                      </Box>
-
-                      {/* =================================
-                          DIVIDER
-                      ================================= */}
-
-                      <Divider
-                        sx={{
-                          borderColor:
-                            "rgba(255,215,0,0.12)",
-
-                          mb: 2,
-                        }}
-                      />
-
-                      {/* =================================
-                          REVIEW TEXT
-                      ================================= */}
-
+                    <Box
+                      sx={{
+                        minWidth: 0,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                        gap: 0.3,
+                      }}
+                    >
                       <Typography
                         sx={{
-                          color:
-                            "rgba(255,255,255,0.90)",
-
-                          fontSize: {
-                            xs: "0.9rem",
-                            sm: "0.95rem",
-                          },
-
-                          lineHeight:
-                            1.7,
-
-                          textAlign:
-                            "left",
-
-                          whiteSpace:
-                            "normal",
-
-                          wordBreak:
-                            "break-word",
-
-                          overflowWrap:
-                            "anywhere",
-
-                          width:
-                            "100%",
-
-                          height:
-                            "auto",
-
-                          overflow:
-                            "visible",
+                          color: "#fff",
+                          fontWeight: 600,
+                          fontSize: { xs: "0.95rem", sm: "1rem" },
+                          lineHeight: 1.3,
+                          overflowWrap: "anywhere",
                         }}
                       >
-                        {review.Review}
+                        {review.Name || "Customer"}
                       </Typography>
 
-                      {/* =================================
-                          DATE
-                      ================================= */}
-
-                      {review.Date && (
-                        <Typography
-                          sx={{
-                            mt: 2,
-
-                            color:
-                              "rgba(255,255,255,0.4)",
-
-                            fontSize:
-                              "0.75rem",
-
-                            textAlign:
-                              "left",
-                          }}
-                        >
-                          {new Date(
-                            review.Date
-                          ).toLocaleDateString(
-                            "en-IN",
-                            {
-                              day: "numeric",
-                              month:
-                                "short",
-                              year: "numeric",
-                            }
-                          )}
-                        </Typography>
-                      )}
+                      <Rating
+                        value={Number(review.Rating) || 0}
+                        readOnly
+                        size="small"
+                        sx={{
+                          color: "#FFD700",
+                          "& .MuiRating-iconEmpty": {
+                            color: "rgba(255,255,255,0.25)",
+                          },
+                        }}
+                      />
                     </Box>
-                  );
-                }
-              )}
-            </Box>
+                  </Box>
+
+                  {/* DIVIDER */}
+
+                  <Divider
+                    sx={{
+                      borderColor: "rgba(255,215,0,0.12)",
+                      mb: 2,
+                    }}
+                  />
+
+                  {/* REVIEW */}
+
+                  <Typography
+                    sx={{
+                      color: "rgba(255,255,255,0.90)",
+                      fontSize: { xs: "0.9rem", sm: "0.95rem" },
+                      lineHeight: 1.7,
+                      whiteSpace: "normal",
+                      overflowWrap: "anywhere",
+                      wordBreak: "break-word",
+                      width: "100%",
+                    }}
+                  >
+                    {review.Review || ""}
+                  </Typography>
+
+                  {/* DATE */}
+
+                  {review.Date && (
+                    <Typography
+                      sx={{
+                        mt: 2,
+                        color: "rgba(255,255,255,0.4)",
+                        fontSize: "0.75rem",
+                      }}
+                    >
+                      {new Date(review.Date).toLocaleDateString(
+                        "en-IN",
+                        {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        }
+                      )}
+                    </Typography>
+                  )}
+                </Box>
+              );
+            })}
           </Box>
-        )}
+        </Box>
+      )}
 
-      {/* ===================================================
-          NO REVIEWS
-      =================================================== */}
+      {/* NO REVIEWS */}
 
-      {!loadingReviews &&
-        !reviewError &&
-        reviews.length === 0 && (
-          <Box
-            sx={{
-              textAlign: "center",
-              py: 5,
-              px: 2,
-            }}
-          >
-            <Typography
-              sx={{
-                color:
-                  "rgba(255,255,255,0.65)",
+      {!loadingReviews && !reviewError && reviews.length === 0 && (
+        <Box sx={{ textAlign: "center", py: 5, px: 2 }}>
+          <Typography sx={{ color: "rgba(255,255,255,0.65)" }}>
+            Be the first to share your experience.
+          </Typography>
+        </Box>
+      )}
 
-                mb: 2,
-              }}
-            >
-              Be the first to share
-              your experience.
-            </Typography>
-          </Box>
-        )}
-
-      {/* ===================================================
-          WRITE REVIEW BUTTON
-      =================================================== */}
+      {/* WRITE REVIEW BUTTON */}
 
       <Box
         sx={{
           display: "flex",
-
-          justifyContent:
-            "center",
-
-          mt: {
-            xs: 3,
-            sm: 4,
-            md: 5,
-          },
-
+          justifyContent: "center",
+          mt: { xs: 3, sm: 4, md: 5 },
           px: 2,
         }}
       >
         <Button
-          onClick={
-            handleOpenReview
-          }
-          startIcon={
-            <RateReview />
-          }
+          onClick={handleOpenReview}
+          startIcon={<RateReview />}
           variant="contained"
           sx={{
-            px: {
-              xs: 3,
-              sm: 4,
-            },
-
+            px: { xs: 3, sm: 4 },
             py: 1.3,
-
             borderRadius: 2,
-
-            textTransform:
-              "none",
-
+            textTransform: "none",
             fontWeight: 600,
-
-            fontSize: {
-              xs: "0.9rem",
-              sm: "1rem",
-            },
-
+            fontSize: { xs: "0.9rem", sm: "1rem" },
             color: "#111",
-
             background:
               "linear-gradient(135deg, #FFD700, #F4B400)",
-
-            boxShadow:
-              "none",
+            boxShadow: "none",
 
             "&:hover": {
               background:
                 "linear-gradient(135deg, #FFE44D, #FFD000)",
-
-              boxShadow:
-                "none",
+              boxShadow: "none",
             },
           }}
         >
@@ -1521,55 +733,34 @@ export default function GoogleReview() {
         </Button>
       </Box>
 
-      {/* ===================================================
-          REVIEW DIALOG
-      =================================================== */}
+      {/* REVIEW DIALOG */}
 
       <Dialog
         open={openDialog}
-        onClose={
-          handleCloseDialog
-        }
+        onClose={handleCloseDialog}
         fullWidth
         maxWidth="sm"
         PaperProps={{
           sx: {
             background:
               "linear-gradient(145deg, #202020, #0c0c0c)",
-
-            border:
-              "1px solid rgba(255,215,0,0.3)",
-
+            border: "1px solid rgba(255,215,0,0.3)",
             borderRadius: 3,
-
-            boxShadow:
-              "none",
-
-            overflow:
-              "hidden",
+            boxShadow: "none",
+            overflow: "hidden",
           },
         }}
       >
-        {/* ===============================================
-            CLOSE
-        =============================================== */}
-
         <IconButton
-          onClick={
-            handleCloseDialog
-          }
+          onClick={handleCloseDialog}
           disabled={submitting}
+          aria-label="Close review dialog"
           sx={{
-            position:
-              "absolute",
-
+            position: "absolute",
             right: 10,
             top: 10,
-
             zIndex: 5,
-
-            color:
-              "rgba(255,255,255,0.75)",
+            color: "rgba(255,255,255,0.75)",
 
             "&:hover": {
               color: "#FFD700",
@@ -1579,38 +770,16 @@ export default function GoogleReview() {
           <Close />
         </IconButton>
 
-        <DialogContent
-          sx={{
-            p: {
-              xs: 3,
-              sm: 4,
-            },
-          }}
-        >
-          {/* =============================================
-              GOOGLE LOGIN
-          ============================================= */}
+        <DialogContent sx={{ p: { xs: 3, sm: 4 } }}>
+          {/* GOOGLE LOGIN */}
 
-          {dialogStep ===
-            "login" && (
-            <Box
-              sx={{
-                textAlign:
-                  "center",
-              }}
-            >
+          {dialogStep === "login" && (
+            <Box sx={{ textAlign: "center" }}>
               <Typography
                 sx={{
-                  color:
-                    "#FFD700",
-
-                  fontSize: {
-                    xs: "1.5rem",
-                    sm: "1.8rem",
-                  },
-
+                  color: "#FFD700",
+                  fontSize: { xs: "1.5rem", sm: "1.8rem" },
                   fontWeight: 700,
-
                   mb: 1,
                 }}
               >
@@ -1619,32 +788,17 @@ export default function GoogleReview() {
 
               <Typography
                 sx={{
-                  color:
-                    "rgba(255,255,255,0.65)",
-
-                  fontSize:
-                    "0.9rem",
-
-                  lineHeight:
-                    1.6,
-
+                  color: "rgba(255,255,255,0.65)",
+                  fontSize: "0.9rem",
+                  lineHeight: 1.6,
                   mb: 3,
                 }}
               >
-                Please sign in with
-                your Google account
-                to continue.
+                Please sign in with your Google account to continue.
               </Typography>
 
               {submitError && (
-                <Alert
-                  severity="error"
-                  sx={{
-                    mb: 2,
-                    textAlign:
-                      "left",
-                  }}
-                >
+                <Alert severity="error" sx={{ mb: 2 }}>
                   {submitError}
                 </Alert>
               )}
@@ -1653,32 +807,21 @@ export default function GoogleReview() {
                 <Box
                   sx={{
                     py: 3,
-
-                    display:
-                      "flex",
-
-                    justifyContent:
-                      "center",
+                    display: "flex",
+                    justifyContent: "center",
                   }}
                 >
                   <CircularProgress
                     size={32}
-                    sx={{
-                      color:
-                        "#FFD700",
-                    }}
+                    sx={{ color: "#FFD700" }}
                   />
                 </Box>
               ) : (
                 <Box
                   id="google-signin-button"
                   sx={{
-                    display:
-                      "flex",
-
-                    justifyContent:
-                      "center",
-
+                    display: "flex",
+                    justifyContent: "center",
                     minHeight: 45,
                   }}
                 />
@@ -1686,346 +829,209 @@ export default function GoogleReview() {
             </Box>
           )}
 
-          {/* =============================================
-              REVIEW FORM
-          ============================================= */}
+          {/* REVIEW FORM */}
 
-          {dialogStep ===
-            "profile" &&
-            googleUser && (
-              <Box>
-                <Typography
+          {dialogStep === "profile" && googleUser && (
+            <Box>
+              <Typography
+                sx={{
+                  color: "#FFD700",
+                  fontSize: { xs: "1.5rem", sm: "1.8rem" },
+                  fontWeight: 700,
+                  mb: 3,
+                  textAlign: "center",
+                }}
+              >
+                Share Your Experience
+              </Typography>
+
+              {/* GOOGLE PROFILE */}
+
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.5,
+                  mb: 3,
+                  p: 1.5,
+                  borderRadius: 2,
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,215,0,0.12)",
+                }}
+              >
+                <Avatar
+                  src={googleUser.photo}
+                  alt={googleUser.name}
                   sx={{
-                    color:
-                      "#FFD700",
-
-                    fontSize: {
-                      xs: "1.5rem",
-                      sm: "1.8rem",
-                    },
-
-                    fontWeight: 700,
-
-                    mb: 3,
-
-                    textAlign:
-                      "center",
+                    width: 52,
+                    height: 52,
+                    border: "2px solid rgba(255,215,0,0.7)",
                   }}
                 >
-                  Share Your Experience
-                </Typography>
+                  {googleUser.name.charAt(0).toUpperCase()}
+                </Avatar>
 
-                {/* =========================================
-                    GOOGLE PROFILE
-                ========================================= */}
-
-                <Box
-                  sx={{
-                    display:
-                      "flex",
-
-                    alignItems:
-                      "center",
-
-                    gap: 1.5,
-
-                    mb: 3,
-
-                    p: 1.5,
-
-                    borderRadius: 2,
-
-                    background:
-                      "rgba(255,255,255,0.04)",
-
-                    border:
-                      "1px solid rgba(255,215,0,0.12)",
-                  }}
-                >
-                  <Avatar
-                    src={
-                      googleUser.photo
-                    }
-                    alt={
-                      googleUser.name
-                    }
-                    sx={{
-                      width: 52,
-                      height: 52,
-
-                      border:
-                        "2px solid rgba(255,215,0,0.7)",
-                    }}
-                  >
-                    {googleUser.name
-                      .charAt(0)
-                      .toUpperCase()}
-                  </Avatar>
-
-                  <Box
-                    sx={{
-                      minWidth: 0,
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        color:
-                          "#fff",
-
-                        fontWeight:
-                          600,
-
-                        fontSize:
-                          "0.95rem",
-
-                        wordBreak:
-                          "break-word",
-                      }}
-                    >
-                      {googleUser.name}
-                    </Typography>
-
-                    <Typography
-                      sx={{
-                        color:
-                          "rgba(255,255,255,0.55)",
-
-                        fontSize:
-                          "0.78rem",
-
-                        wordBreak:
-                          "break-word",
-                      }}
-                    >
-                      {googleUser.email}
-                    </Typography>
-                  </Box>
-                </Box>
-
-                {/* =========================================
-                    RATING
-                ========================================= */}
-
-                <Box
-                  sx={{
-                    mb: 3,
-                  }}
-                >
+                <Box sx={{ minWidth: 0 }}>
                   <Typography
                     sx={{
-                      color:
-                        "#fff",
-
-                      fontWeight:
-                        600,
-
-                      mb: 1,
-
-                      fontSize:
-                        "0.95rem",
+                      color: "#fff",
+                      fontWeight: 600,
+                      fontSize: "0.95rem",
+                      overflowWrap: "anywhere",
                     }}
                   >
-                    Your Rating
+                    {googleUser.name}
                   </Typography>
 
-                  <Rating
-                    value={rating}
-                    onChange={(
-                      _,
-                      newValue
-                    ) => {
-                      setRating(
-                        newValue || 0
-                      );
-
-                      setSubmitError(
-                        ""
-                      );
-                    }}
-                    size="large"
+                  <Typography
                     sx={{
-                      color:
-                        "#FFD700",
-
-                      "& .MuiRating-iconEmpty":
-                        {
-                          color:
-                            "rgba(255,255,255,0.22)",
-                        },
+                      color: "rgba(255,255,255,0.55)",
+                      fontSize: "0.78rem",
+                      overflowWrap: "anywhere",
                     }}
-                  />
+                  >
+                    {googleUser.email}
+                  </Typography>
                 </Box>
+              </Box>
 
-                {/* =========================================
-                    COMMENT
-                ========================================= */}
+              {/* STAR RATING */}
 
-                <TextField
-                  fullWidth
-                  multiline
-                  minRows={5}
-                  maxRows={12}
-                  value={comment}
-                  onChange={(e) => {
-                    setComment(
-                      e.target.value
-                    );
-
-                    setSubmitError(
-                      ""
-                    );
-                  }}
-                  placeholder="Write your review..."
-                  variant="outlined"
+              <Box sx={{ mb: 3 }}>
+                <Typography
                   sx={{
-                    mb: 2.5,
-
-                    "& .MuiOutlinedInput-root":
-                      {
-                        color:
-                          "#fff",
-
-                        borderRadius:
-                          2,
-
-                        background:
-                          "rgba(255,255,255,0.03)",
-
-                        "& fieldset": {
-                          borderColor:
-                            "rgba(255,255,255,0.18)",
-                        },
-
-                        "&:hover fieldset":
-                          {
-                            borderColor:
-                              "rgba(255,215,0,0.5)",
-                          },
-
-                        "&.Mui-focused fieldset":
-                          {
-                            borderColor:
-                              "#FFD700",
-                          },
-                      },
-
-                    "& .MuiInputBase-input::placeholder":
-                      {
-                        color:
-                          "rgba(255,255,255,0.45)",
-
-                        opacity: 1,
-                      },
-                  }}
-                />
-
-                {/* =========================================
-                    ERROR
-                ========================================= */}
-
-                {submitError && (
-                  <Alert
-                    severity="error"
-                    sx={{
-                      mb: 2,
-                    }}
-                  >
-                    {submitError}
-                  </Alert>
-                )}
-
-                {/* =========================================
-                    SUCCESS
-                ========================================= */}
-
-                {submitMessage && (
-                  <Alert
-                    severity="success"
-                    sx={{
-                      mb: 2,
-                    }}
-                  >
-                    {submitMessage}
-                  </Alert>
-                )}
-
-                {/* =========================================
-                    SUBMIT
-                ========================================= */}
-
-                <Button
-                  fullWidth
-                  onClick={
-                    handleSubmitReview
-                  }
-                  disabled={
-                    submitting
-                  }
-                  variant="contained"
-                  sx={{
-                    py: 1.35,
-
-                    borderRadius: 2,
-
-                    textTransform:
-                      "none",
-
+                    color: "#fff",
                     fontWeight: 600,
-
-                    color: "#111",
-
-                    background:
-                      "linear-gradient(135deg, #FFD700, #F4B400)",
-
-                    boxShadow:
-                      "none",
-
-                    "&:hover": {
-                      background:
-                        "linear-gradient(135deg, #FFE44D, #FFD000)",
-
-                      boxShadow:
-                        "none",
-                    },
-
-                    "&.Mui-disabled":
-                      {
-                        color:
-                          "rgba(0,0,0,0.55)",
-
-                        background:
-                          "rgba(255,215,0,0.45)",
-                      },
+                    mb: 1,
+                    fontSize: "0.95rem",
                   }}
                 >
-                  {submitting ? (
-                    <Box
-                      sx={{
-                        display:
-                          "flex",
+                  Your Rating
+                </Typography>
 
-                        alignItems:
-                          "center",
-
-                        gap: 1,
-                      }}
-                    >
-                      <CircularProgress
-                        size={20}
-                        sx={{
-                          color:
-                            "#111",
-                        }}
-                      />
-
-                      Submitting...
-                    </Box>
-                  ) : (
-                    "Submit Review"
-                  )}
-                </Button>
+                <Rating
+                  value={rating}
+                  onChange={(_, newValue) => {
+                    setRating(newValue || 0);
+                    setSubmitError("");
+                  }}
+                  size="large"
+                  sx={{
+                    color: "#FFD700",
+                    "& .MuiRating-iconEmpty": {
+                      color: "rgba(255,255,255,0.22)",
+                    },
+                  }}
+                />
               </Box>
-            )}
+
+              {/* COMMENT */}
+
+              <TextField
+                fullWidth
+                multiline
+                minRows={5}
+                maxRows={12}
+                value={comment}
+                onChange={(event) => {
+                  setComment(event.target.value);
+                  setSubmitError("");
+                }}
+                placeholder="Write your review..."
+                variant="outlined"
+                sx={{
+                  mb: 2.5,
+
+                  "& .MuiOutlinedInput-root": {
+                    color: "#fff",
+                    borderRadius: 2,
+                    background: "rgba(255,255,255,0.03)",
+
+                    "& fieldset": {
+                      borderColor: "rgba(255,255,255,0.18)",
+                    },
+
+                    "&:hover fieldset": {
+                      borderColor: "rgba(255,215,0,0.5)",
+                    },
+
+                    "&.Mui-focused fieldset": {
+                      borderColor: "#FFD700",
+                    },
+                  },
+
+                  "& .MuiInputBase-input::placeholder": {
+                    color: "rgba(255,255,255,0.45)",
+                    opacity: 1,
+                  },
+                }}
+              />
+
+              {/* ERROR */}
+
+              {submitError && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {submitError}
+                </Alert>
+              )}
+
+              {/* SUCCESS */}
+
+              {submitMessage && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  {submitMessage}
+                </Alert>
+              )}
+
+              {/* SUBMIT BUTTON */}
+
+              <Button
+                fullWidth
+                onClick={handleSubmitReview}
+                disabled={submitting}
+                variant="contained"
+                sx={{
+                  py: 1.35,
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontWeight: 600,
+                  color: "#111",
+                  background:
+                    "linear-gradient(135deg, #FFD700, #F4B400)",
+                  boxShadow: "none",
+
+                  "&:hover": {
+                    background:
+                      "linear-gradient(135deg, #FFE44D, #FFD000)",
+                    boxShadow: "none",
+                  },
+
+                  "&.Mui-disabled": {
+                    color: "rgba(0,0,0,0.55)",
+                    background: "rgba(255,215,0,0.45)",
+                  },
+                }}
+              >
+                {submitting ? (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                    }}
+                  >
+                    <CircularProgress
+                      size={20}
+                      sx={{ color: "#111" }}
+                    />
+                    Submitting...
+                  </Box>
+                ) : (
+                  "Submit Review"
+                )}
+              </Button>
+            </Box>
+          )}
         </DialogContent>
       </Dialog>
     </Box>

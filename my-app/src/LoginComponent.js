@@ -1,4 +1,3 @@
-// LoginComponent.js
 
 import React, { useState } from "react";
 import {
@@ -10,24 +9,39 @@ import {
   Fade,
 } from "@mui/material";
 
-import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
-import MenuBookIcon from "@mui/icons-material/MenuBook";
-import VideoLibraryIcon from "@mui/icons-material/VideoLibrary";
+import PhotoLibraryRoundedIcon from "@mui/icons-material/PhotoLibraryRounded";
+import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
+import VideoLibraryRoundedIcon from "@mui/icons-material/VideoLibraryRounded";
 
 import LoginPageGallery from "./LoginPageGallery";
-import LoginPdf from "./LoginPdf";
 import LoginPdf1 from "./LoginPdf1";
-import LoginPdf2 from "./LoginPdf2";
-
 import LoginVideos from "./LoginVideos";
+
+const GOLD = "#D9B568";
+const GOLD_LIGHT = "#F5E4B2";
+const TEXT_MUTED = "rgba(239,231,214,0.58)";
 
 export default function LoginComponent() {
   const [activeTab, setActiveTab] = useState(0);
-  const [activeAlbum, setActiveAlbum] = useState(0);
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
   };
+
+  const tabs = [
+    {
+      label: "Photos",
+      icon: <PhotoLibraryRoundedIcon />,
+    },
+    {
+      label: "Albums",
+      icon: <MenuBookRoundedIcon />,
+    },
+    {
+      label: "Videos",
+      icon: <VideoLibraryRoundedIcon />,
+    },
+  ];
 
   return (
     <Box
@@ -35,36 +49,57 @@ export default function LoginComponent() {
         minHeight: "100vh",
         width: "100%",
         position: "relative",
-        overflow: "hidden",
+        isolation: "isolate",
+        overflowX: "clip",
+        color: "#F5F0E6",
 
         background: `
-          radial-gradient(circle at 20% 20%, rgba(255, 193, 7, 0.10), transparent 30%),
-          radial-gradient(circle at 80% 80%, rgba(0, 150, 255, 0.10), transparent 30%),
-          linear-gradient(135deg, #050505 0%, #101010 45%, #050505 100%)
+          radial-gradient(
+            ellipse at 15% 5%,
+            rgba(201,161,77,0.11),
+            transparent 32%
+          ),
+          radial-gradient(
+            ellipse at 90% 55%,
+            rgba(145,108,45,0.065),
+            transparent 35%
+          ),
+          linear-gradient(
+            145deg,
+            #08090D 0%,
+            #111116 48%,
+            #08090C 100%
+          )
         `,
 
         "&::before": {
           content: '""',
-          position: "fixed",
+          position: "absolute",
           inset: 0,
           pointerEvents: "none",
-          background:
-            "linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.025) 50%, transparent 70%)",
-          zIndex: 0,
+          zIndex: -1,
+          opacity: 0.22,
+          backgroundImage:
+            "radial-gradient(rgba(235,210,158,0.18) 0.6px, transparent 0.6px)",
+          backgroundSize: "26px 26px",
         },
       }}
     >
-      {/* Main Header */}
+      {/* HEADER */}
       <Box
         sx={{
           position: "relative",
           zIndex: 2,
           width: "100%",
+          boxSizing: "border-box",
+
+          // Space below the fixed DashboardNavbar
           pt: {
-            xs: 2,
-            sm: 3,
-            md: 4,
+            xs: "76px",
+            sm: "88px",
+            md: "96px",
           },
+
           px: {
             xs: 1.5,
             sm: 3,
@@ -72,34 +107,40 @@ export default function LoginComponent() {
           },
         }}
       >
-        {/* Title */}
+        {/* BRAND TITLE */}
         <Box
           sx={{
             textAlign: "center",
             mb: {
-              xs: 2,
+              xs: 2.2,
+              sm: 2.7,
               md: 3,
             },
           }}
         >
           <Typography
+            component="h1"
             sx={{
               fontSize: {
-                xs: "1.7rem",
-                sm: "2.1rem",
-                md: "2.5rem",
+                xs: "1.65rem",
+                sm: "2.2rem",
+                md: "2.7rem",
               },
-              fontWeight: 700,
+              lineHeight: 1.2,
+              fontWeight: 750,
               letterSpacing: {
-                xs: 1,
-                md: 2,
+                xs: "0.025em",
+                sm: "0.055em",
               },
-              color: "#fff",
 
-              textShadow: `
-                0 0 10px rgba(255,255,255,0.15),
-                0 0 25px rgba(255,193,7,0.12)
-              `,
+              background:
+                "linear-gradient(100deg, #F7E8BE 5%, #D7B15F 48%, #F4DDA0 95%)",
+              backgroundClip: "text",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+
+              filter:
+                "drop-shadow(0 3px 18px rgba(211,174,93,0.13))",
             }}
           >
             Golden Dreams
@@ -107,117 +148,157 @@ export default function LoginComponent() {
 
           <Typography
             sx={{
-              mt: 0.5,
-              color: "rgba(255,255,255,0.55)",
+              mt: 0.8,
+              color: TEXT_MUTED,
               fontSize: {
-                xs: "0.75rem",
-                sm: "0.85rem",
+                xs: "0.59rem",
+                sm: "0.72rem",
+                md: "0.78rem",
               },
-              letterSpacing: 2,
+              fontWeight: 500,
+              letterSpacing: {
+                xs: "0.11em",
+                sm: "0.21em",
+              },
+              lineHeight: 1.8,
             }}
           >
-            YOUR MEMORIES • YOUR MOMENTS • YOUR STORY
+            YOUR MEMORIES · YOUR MOMENTS · YOUR STORY
           </Typography>
+
+          {/* Gold accent */}
+          <Box
+            sx={{
+              width: { xs: 42, sm: 55 },
+              height: 2,
+              mx: "auto",
+              mt: 1.5,
+              borderRadius: 5,
+              background:
+                "linear-gradient(90deg, transparent, #D9B568, transparent)",
+            }}
+          />
         </Box>
 
-        {/* Glass Navigation */}
+        {/* NAVIGATION */}
         <Paper
           elevation={0}
           sx={{
-            mx: "auto",
             width: "100%",
-            maxWidth: "900px",
+            maxWidth: 780,
+            mx: "auto",
+            overflow: "hidden",
+            boxSizing: "border-box",
 
-            background: "rgba(255,255,255,0.055)",
-            backdropFilter: "blur(25px)",
-            WebkitBackdropFilter: "blur(25px)",
+            background:
+              "linear-gradient(135deg, rgba(29,28,26,0.92), rgba(13,14,18,0.96))",
 
-            border: "1px solid rgba(255,255,255,0.10)",
+            backdropFilter: "blur(22px)",
+            WebkitBackdropFilter: "blur(22px)",
 
+            border: "1px solid rgba(217,181,104,0.23)",
             borderRadius: {
-              xs: "18px",
-              sm: "24px",
+              xs: "15px",
+              sm: "19px",
             },
 
-            boxShadow: `
-              0 15px 50px rgba(0,0,0,0.45),
-              inset 0 1px 0 rgba(255,255,255,0.08)
-            `,
-
-            overflow: "hidden",
+            boxShadow:
+              "0 12px 34px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)",
           }}
         >
           <Tabs
             value={activeTab}
             onChange={handleTabChange}
             variant="fullWidth"
+            aria-label="Gallery sections"
             sx={{
               minHeight: {
-                xs: 68,
-                sm: 76,
+                xs: 61,
+                sm: 69,
+                md: 73,
               },
 
               "& .MuiTabs-indicator": {
-                height: 3,
-                borderRadius: "10px 10px 0 0",
-
+                height: 2,
+                borderRadius: "3px 3px 0 0",
                 background:
-                  "linear-gradient(90deg, #ffd54f, #ffb300, #fff176)",
-
+                  "linear-gradient(90deg, #B58A3A, #F5E0A5, #C59B4A)",
                 boxShadow:
-                  "0 0 15px rgba(255,193,7,0.65)",
+                  "0 0 12px rgba(217,181,104,0.3)",
               },
 
               "& .MuiTab-root": {
+                minWidth: 0,
                 minHeight: {
-                  xs: 68,
-                  sm: 76,
+                  xs: 61,
+                  sm: 69,
+                  md: 73,
                 },
 
-                color: "rgba(255,255,255,0.45)",
-                fontWeight: 600,
+                px: {
+                  xs: 0.5,
+                  sm: 1.5,
+                },
 
+                py: 1,
+                gap: {
+                  xs: 0.4,
+                  sm: 0.65,
+                },
+
+                color: "rgba(239,231,214,0.53)",
                 fontSize: {
-                  xs: "0.72rem",
-                  sm: "0.85rem",
+                  xs: "0.7rem",
+                  sm: "0.82rem",
+                  md: "0.86rem",
                 },
 
-                transition: "all 0.3s ease",
+                fontWeight: 600,
+                letterSpacing: "0.02em",
+                textTransform: "none",
+
+                transition:
+                  "color 0.22s ease, background 0.22s ease",
+
+                "& .MuiSvgIcon-root": {
+                  fontSize: {
+                    xs: 20,
+                    sm: 22,
+                  },
+                },
 
                 "&:hover": {
-                  color: "#fff",
-                  background: "rgba(255,255,255,0.04)",
+                  color: GOLD_LIGHT,
+                  background:
+                    "rgba(217,181,104,0.045)",
                 },
-              },
 
-              "& .Mui-selected": {
-                color: "#ffd54f !important",
-                textShadow: "0 0 12px rgba(255,193,7,0.35)",
+                "&.Mui-selected": {
+                  color: GOLD_LIGHT,
+                  background:
+                    "linear-gradient(180deg, rgba(217,181,104,0.08), transparent)",
+                },
+
+                "&:focus-visible": {
+                  outline: `2px solid ${GOLD}`,
+                  outlineOffset: -3,
+                },
               },
             }}
           >
-            <Tab
-              icon={<PhotoLibraryIcon />}
-              iconPosition="top"
-              label="Photos"
-            />
-
-            <Tab
-              icon={<MenuBookIcon />}
-              iconPosition="top"
-              label="Album"
-            />
-
-            <Tab
-              icon={<VideoLibraryIcon />}
-              iconPosition="top"
-              label="Video"
-            />
+            {tabs.map((tab) => (
+              <Tab
+                key={tab.label}
+                icon={tab.icon}
+                iconPosition="start"
+                label={tab.label}
+              />
+            ))}
           </Tabs>
         </Paper>
       </Box>
 
-      {/* CONTENT */}
+      {/* MAIN CONTENT */}
       <Box
         sx={{
           position: "relative",
@@ -225,154 +306,37 @@ export default function LoginComponent() {
           width: "100%",
           mt: {
             xs: 2,
-            sm: 3,
+            sm: 2.5,
+            md: 3,
           },
-          pb: 5,
+          pb: {
+            xs: 3,
+            sm: 4,
+            md: 5,
+          },
         }}
       >
-        {/* ================= PHOTOS ================= */}
+        {/* PHOTOS */}
         {activeTab === 0 && (
-          <Fade in timeout={350}>
+          <Fade in timeout={250}>
             <Box sx={{ width: "100%" }}>
               <LoginPageGallery />
             </Box>
           </Fade>
         )}
 
-        {/* ================= ALBUM ================= */}
+        {/* SINGLE ALBUM */}
         {activeTab === 1 && (
-          <Fade in timeout={350}>
-            <Box
-              sx={{
-                width: "100%",
-              }}
-            >
-              {/* Album selector */}
-              <Box
-                sx={{
-                  width: "100%",
-                  display: "flex",
-                  justifyContent: "center",
-                  px: 2,
-                  mb: 2,
-                }}
-              >
-                <Paper
-                  elevation={0}
-                  sx={{
-                    display: "flex",
-                    gap: 1,
-                    p: 0.7,
-
-                    maxWidth: "600px",
-                    width: "100%",
-
-                    background: "rgba(255,255,255,0.045)",
-                    backdropFilter: "blur(20px)",
-                    WebkitBackdropFilter: "blur(20px)",
-
-                    border:
-                      "1px solid rgba(255,255,255,0.09)",
-
-                    borderRadius: "18px",
-
-                    boxShadow:
-                      "inset 0 1px 0 rgba(255,255,255,0.06)",
-                  }}
-                >
-                  {[
-                    {
-                      label: "Album 1",
-                      icon: "01",
-                    },
-                    {
-                      label: "Album 2",
-                      icon: "02",
-                    },
-                    {
-                      label: "Album 3",
-                      icon: "03",
-                    },
-                  ].map((album, index) => (
-                    <Box
-                      key={album.label}
-                      onClick={() => setActiveAlbum(index)}
-                      sx={{
-                        flex: 1,
-
-                        py: {
-                          xs: 1,
-                          sm: 1.2,
-                        },
-
-                        px: 1,
-
-                        textAlign: "center",
-
-                        cursor: "pointer",
-
-                        borderRadius: "13px",
-
-                        color:
-                          activeAlbum === index
-                            ? "#ffd54f"
-                            : "rgba(255,255,255,0.5)",
-
-                        background:
-                          activeAlbum === index
-                            ? "rgba(255,193,7,0.10)"
-                            : "transparent",
-
-                        border:
-                          activeAlbum === index
-                            ? "1px solid rgba(255,193,7,0.20)"
-                            : "1px solid transparent",
-
-                        transition: "all 0.25s ease",
-
-                        "&:hover": {
-                          background:
-                            "rgba(255,255,255,0.07)",
-                          color: "#fff",
-                        },
-                      }}
-                    >
-                      <Typography
-                        sx={{
-                          fontSize: "0.65rem",
-                          opacity: 0.55,
-                        }}
-                      >
-                        {album.icon}
-                      </Typography>
-
-                      <Typography
-                        sx={{
-                          fontSize: {
-                            xs: "0.72rem",
-                            sm: "0.82rem",
-                          },
-                          fontWeight: 600,
-                        }}
-                      >
-                        {album.label}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Paper>
-              </Box>
-
-              {/* Album components */}
-              {activeAlbum === 0 && <LoginPdf />}
-              {activeAlbum === 1 && <LoginPdf1 />}
-              {activeAlbum === 2 && <LoginPdf2 />}
+          <Fade in timeout={250}>
+            <Box sx={{ width: "100%" }}>
+              <LoginPdf1 />
             </Box>
           </Fade>
         )}
 
-        {/* ================= VIDEO ================= */}
+        {/* VIDEOS */}
         {activeTab === 2 && (
-          <Fade in timeout={350}>
+          <Fade in timeout={250}>
             <Box sx={{ width: "100%" }}>
               <LoginVideos />
             </Box>
