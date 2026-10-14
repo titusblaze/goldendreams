@@ -429,25 +429,14 @@ function ContactUs() {
     <Box
       sx={{
         width: "100%",
+        mt: { xs: "50px", md: "40px" }, // Mobile only
         minHeight: "100vh",
         boxSizing: "border-box",
         position: "relative",
         overflow: "hidden",
         color: "#FFF8E8",
 
-        background: `
-          radial-gradient(
-            ellipse at 12% 12%,
-            rgba(128, 91, 31, 0.13),
-            transparent 36%
-          ),
-          radial-gradient(
-            ellipse at 90% 45%,
-            rgba(151, 111, 39, 0.08),
-            transparent 35%
-          ),
-          linear-gradient(145deg, #090909, #10100F 48%, #070707)
-        `,
+        background:'transparent',
 
         pt: { xs: 5, sm: 7, md: 9 },
         pb: { xs: 6, md: 10 },
@@ -572,17 +561,24 @@ function ContactUs() {
               Get in Touch
             </Typography>
 
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: {
-                  xs: "minmax(0, 1fr)",
-                  sm: "repeat(auto-fit, minmax(260px, 1fr))",
-                },
-                gap: { xs: 2.5, sm: 3 },
-                alignItems: "stretch",
-              }}
-            >
+
+              <Box
+                sx={{
+                  display: "grid",
+
+                  // Adjust contact person card width here
+                  gridTemplateColumns: {
+                    xs: "minmax(0, 1fr)",       // Mobile: full width
+                    sm: "repeat(auto-fit, minmax(280px, 320px))", // Tablet
+                    md: "repeat(auto-fit, minmax(280px, 340px))", // Desktop
+                  },
+
+                  gap: { xs: 2, sm: 3 },
+                  justifyContent: "center",
+                  alignItems: "stretch",
+                }}
+              >
+
               {persons.map((item, index) => (
                 <motion.div
                   key={`${item.Id}-${item.Phone || index}`}

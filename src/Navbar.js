@@ -29,7 +29,7 @@ const Navbar = () => {
     <Box
       sx={{
         position: "fixed",
-        top: "50px",
+        top: "30px",
         left: "50%",
         transform: "translateX(-50%)",
         zIndex: 1200,
