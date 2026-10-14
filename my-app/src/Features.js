@@ -1,5 +1,5 @@
-// Features.js
-import React, { useState, useRef, useEffect } from "react";
+
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -8,11 +8,19 @@ import {
   useTheme,
   useMediaQuery,
 } from "@mui/material";
+
 import { motion, AnimatePresence } from "framer-motion";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
 
-const slides = [
+import { getAllApiData } from "./api";
+
+// =====================================================
+// FALLBACK DATA
+// Used immediately and whenever the API fails or is empty.
+// =====================================================
+
+const fallbackSlides = [
   {
     id: "A",
     title: "Mirrorless Pro Mastery",
@@ -28,7 +36,7 @@ const slides = [
     id: "B",
     title: "CrystalPrime Lens Series",
     desc:
-      "Ultra-sharp prime & zoom lenses for bokeh perfection and low-light dominance.\nIdeal for weddings and editorial shoots.",
+      "Ultra-sharp prime and zoom lenses for bokeh perfection and low-light dominance.\nIdeal for weddings and editorial shoots.",
     bg:
       "https://images.unsplash.com/photo-1504215680853-026ed2a45def?q=80&w=1600&auto=format&fit=crop",
     sample:
@@ -39,7 +47,7 @@ const slides = [
     id: "C",
     title: "CineRig 8K Tools",
     desc:
-      "Film-level rigs, gimbals and 8K-capable cameras for cinematic motion and buttery stabilization.\nIncludes pro grading workflow.",
+      "Film-level rigs, gimbals and 8K-capable cameras for cinematic motion and buttery stabilization.\nIncludes professional grading workflow.",
     bg:
       "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?q=80&w=1600&auto=format&fit=crop",
     sample:
@@ -50,7 +58,7 @@ const slides = [
     id: "D",
     title: "Mobile Creators Suite",
     desc:
-      "Turn smartphones into film tools with gimbals, RGB panels, and pro audio.\nCompact, powerful, and travel-friendly.",
+      "Turn smartphones into film tools with gimbals, RGB panels, and professional audio.\nCompact, powerful, and travel-friendly.",
     bg:
       "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?q=80&w=1600&auto=format&fit=crop",
     sample:
@@ -61,7 +69,7 @@ const slides = [
     id: "E",
     title: "Broadcast HD & 4K Options",
     desc:
-      "High-frame-rate capture, HDR workflows, and easy streaming setups for live events.\nDeliver crisp HD & 4K content reliably.",
+      "High-frame-rate capture, HDR workflows, and easy streaming setups for live events.\nDeliver crisp HD and 4K content reliably.",
     bg:
       "https://images.unsplash.com/photo-1470123808288-6ccdb62f86ef?q=80&w=1600&auto=format&fit=crop",
     sample:
@@ -70,94 +78,228 @@ const slides = [
   },
 ];
 
+// =====================================================
+// API HELPERS
+// =====================================================
+
+const isValidUrl = (value) => {
+  if (!value || typeof value !== "string") return false;
+
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+};
+
+// Handles Accent formats such as:
+// "#FFD54F", "#FFB300"
+// ["#FFD54F", "#FFB300"]
+// ["#FFD54F","#FFB300"]
+const parseAccent = (value, fallbackAccent) => {
+  if (!value) return fallbackAccent;
+
+  const matches = String(value).match(
+    /#[0-9a-fA-F]{3,8}\b/g
+  );
+
+  if (matches && matches.length >= 2) {
+    return [matches[0], matches[1]];
+  }
+
+  if (matches && matches.length === 1) {
+    return [matches[0], fallbackAccent[1]];
+  }
+
+  return fallbackAccent;
+};
+
+const normalizeSlides = (records) => {
+  if (!Array.isArray(records)) return [];
+
+  return records
+    .filter((item) => String(item?.Id ?? "").trim() === "5")
+    .filter((item) => isValidUrl(item?.link1) && isValidUrl(item?.link))
+    .map((item, index) => {
+      const fallback = fallbackSlides[index % fallbackSlides.length];
+
+      return {
+        id: `api-${item.Id}-${index}`,
+        title:
+          String(item.Title || "").trim() || fallback.title,
+        desc:
+          String(item.Description1 || "")
+            .replace(/\\n/g, "\n")
+            .trim() || fallback.desc,
+        bg: String(item.link1).trim(),
+        sample: String(item.link).trim(),
+        accent: parseAccent(item.Accent, fallback.accent),
+      };
+    });
+};
+
 const bgVariants = {
   enter: { opacity: 0, scale: 1.06 },
   center: { opacity: 1, scale: 1 },
   exit: { opacity: 0, scale: 0.98 },
 };
 
-export default function Features() {
-  const [index, setIndex] = useState(0);
-  const slideCount = slides.length;
+// =====================================================
+// FEATURES COMPONENT
+// =====================================================
 
-  // autoplay
+export default function Features() {
+  // Fallback content appears immediately.
+  const [slides, setSlides] = useState(fallbackSlides);
+  const [index, setIndex] = useState(0);
+
   const autoplayRef = useRef(null);
   const containerRef = useRef(null);
+  const pointerStartRef = useRef(null);
+  const pauseRef = useRef(false);
+
   const theme = useTheme();
   const isSm = useMediaQuery(theme.breakpoints.down("sm"));
   const isMd = useMediaQuery(theme.breakpoints.down("md"));
 
-  useEffect(() => {
-    startAutoplay();
-    return stopAutoplay;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index]);
+  const slideCount = slides.length;
+  const current = slides[index] || fallbackSlides[0];
 
-  function startAutoplay() {
-    stopAutoplay();
-    autoplayRef.current = setInterval(() => {
-      setIndex((s) => (s + 1) % slideCount);
-    }, 5200);
-  }
-  function stopAutoplay() {
+  // ===================================================
+  // FETCH GOOGLE APPS SCRIPT DATA
+  // Uses getAllApiData() from ./api
+  // ===================================================
+
+  useEffect(() => {
+    let active = true;
+
+    const loadFeatures = async () => {
+      try {
+        const records = await getAllApiData();
+        const apiSlides = normalizeSlides(records);
+
+        if (!active) return;
+
+        // Only replace fallback if valid API slides exist.
+        if (apiSlides.length > 0) {
+          setSlides(apiSlides);
+          setIndex(0);
+        } else {
+          console.warn(
+            "Features API returned no valid Id=5 slides. Using fallback data."
+          );
+          setSlides(fallbackSlides);
+        }
+      } catch (error) {
+        console.error(
+          "Failed to load Features API. Using fallback slides:",
+          error
+        );
+
+        if (active) {
+          setSlides(fallbackSlides);
+          setIndex(0);
+        }
+      }
+    };
+
+    loadFeatures();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // ===================================================
+  // AUTOPLAY
+  // ===================================================
+
+  const stopAutoplay = useCallback(() => {
     if (autoplayRef.current) {
       clearInterval(autoplayRef.current);
       autoplayRef.current = null;
     }
-  }
-
-  // pointer swipe handling (no external lib)
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    let startX = null;
-    let startTime = null;
-
-    function onPointerDown(e) {
-      stopAutoplay();
-      startX = e.clientX ?? (e.touches && e.touches[0].clientX);
-      startTime = Date.now();
-      window.addEventListener("pointerup", onPointerUp);
-      window.addEventListener("pointermove", onPointerMove);
-    }
-    function onPointerMove(e) {
-      // no-op (we do not track dragging visual)
-    }
-    function onPointerUp(e) {
-      const endX = e.clientX ?? (e.changedTouches && e.changedTouches[0].clientX);
-      const dx = endX - startX;
-      const dt = Date.now() - startTime;
-      // quick swipe threshold
-      if (Math.abs(dx) > 50 && dt < 600) {
-        if (dx < 0) setIndex((s) => (s + 1) % slideCount);
-        else setIndex((s) => (s - 1 + slideCount) % slideCount);
-      }
-      window.removeEventListener("pointerup", onPointerUp);
-      window.removeEventListener("pointermove", onPointerMove);
-      startAutoplay();
-    }
-
-    el.addEventListener("pointerdown", onPointerDown);
-    return () => {
-      el.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("pointerup", onPointerUp);
-      window.removeEventListener("pointermove", onPointerMove);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const goPrev = () => {
+  const startAutoplay = useCallback(() => {
     stopAutoplay();
-    setIndex((s) => (s - 1 + slideCount) % slideCount);
+
+    if (pauseRef.current || slideCount <= 1) return;
+
+    autoplayRef.current = setInterval(() => {
+      setIndex((previous) => (previous + 1) % slideCount);
+    }, 5200);
+  }, [slideCount, stopAutoplay]);
+
+  useEffect(() => {
     startAutoplay();
-  };
-  const goNext = () => {
-    stopAutoplay();
-    setIndex((s) => (s + 1) % slideCount);
-    startAutoplay();
+    return stopAutoplay;
+  }, [startAutoplay, stopAutoplay]);
+
+  // ===================================================
+  // NAVIGATION
+  // ===================================================
+
+  const goPrev = useCallback(() => {
+    setIndex((previous) =>
+      (previous - 1 + slideCount) % slideCount
+    );
+  }, [slideCount]);
+
+  const goNext = useCallback(() => {
+    setIndex((previous) => (previous + 1) % slideCount);
+  }, [slideCount]);
+
+  const selectSlide = (newIndex) => {
+    setIndex(newIndex);
   };
 
-  const current = slides[index];
+  // ===================================================
+  // SWIPE SUPPORT
+  // ===================================================
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+
+    const handlePointerDown = (event) => {
+      pointerStartRef.current = {
+        x: event.clientX,
+        time: Date.now(),
+      };
+    };
+
+    const handlePointerUp = (event) => {
+      const start = pointerStartRef.current;
+      if (!start) return;
+
+      pointerStartRef.current = null;
+
+      const dx = event.clientX - start.x;
+      const duration = Date.now() - start.time;
+
+      if (Math.abs(dx) > 50 && duration < 600) {
+        if (dx < 0) {
+          goNext();
+        } else {
+          goPrev();
+        }
+      }
+    };
+
+    element.addEventListener("pointerdown", handlePointerDown);
+    element.addEventListener("pointerup", handlePointerUp);
+
+    return () => {
+      element.removeEventListener("pointerdown", handlePointerDown);
+      element.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [goNext, goPrev]);
+
+  // ===================================================
+  // MAIN UI — DESIGN RETAINED
+  // ===================================================
 
   return (
     <Box
@@ -175,10 +317,16 @@ export default function Features() {
         px: { xs: 2, sm: 4, md: 6 },
         py: { xs: 6, md: 10 },
       }}
-      onMouseEnter={stopAutoplay}
-      onMouseLeave={startAutoplay}
+      onMouseEnter={() => {
+        pauseRef.current = true;
+        stopAutoplay();
+      }}
+      onMouseLeave={() => {
+        pauseRef.current = false;
+        startAutoplay();
+      }}
     >
-      {/* Background image (animated swap) */}
+      {/* Background image */}
       <AnimatePresence initial={false} mode="wait">
         <motion.img
           key={current.bg}
@@ -188,7 +336,10 @@ export default function Features() {
           initial="enter"
           animate="center"
           exit="exit"
-          transition={{ duration: 0.9, ease: "easeOut" }}
+          transition={{ duration: 2 , ease: "easeOut" }}
+          onError={(event) => {
+            event.currentTarget.style.display = "none";
+          }}
           style={{
             position: "absolute",
             inset: 0,
@@ -202,8 +353,9 @@ export default function Features() {
         />
       </AnimatePresence>
 
-      {/* Subtle ambient blobs */}
+      {/* Ambient glow */}
       <motion.div
+        key={`glow-left-${current.id}`}
         initial={{ opacity: 0 }}
         animate={{ opacity: 0.2 }}
         transition={{ duration: 1.6 }}
@@ -218,9 +370,12 @@ export default function Features() {
           filter: "blur(56px)",
           zIndex: 1,
           mixBlendMode: "screen",
+          pointerEvents: "none",
         }}
       />
+
       <motion.div
+        key={`glow-right-${current.id}`}
         initial={{ opacity: 0 }}
         animate={{ opacity: 0.16 }}
         transition={{ duration: 1.9 }}
@@ -235,16 +390,18 @@ export default function Features() {
           filter: "blur(80px)",
           zIndex: 1,
           mixBlendMode: "screen",
+          pointerEvents: "none",
         }}
       />
 
-      {/* Navigation arrows (always visible on desktop, present on mobile) */}
+      {/* Previous arrow */}
       <IconButton
         onClick={goPrev}
+        aria-label="Previous feature"
         sx={{
           position: "absolute",
           left: { xs: 12, md: 100 },
-          top: "50%",
+          top: {xs: "40%", md:"50%"},
           transform: "translateY(-50%)",
           zIndex: 9,
           bgcolor: "rgba(0,0,0,0.72)",
@@ -253,17 +410,18 @@ export default function Features() {
           "&:hover": { bgcolor: "rgba(0,0,0,0.9)" },
           boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
         }}
-        aria-label="previous"
       >
         <ArrowBackIosNewIcon />
       </IconButton>
 
+      {/* Next arrow */}
       <IconButton
         onClick={goNext}
+        aria-label="Next feature"
         sx={{
           position: "absolute",
           right: { xs: 12, md: 100 },
-          top: "50%",
+          top: {xs: "40%", md:"50%"},
           transform: "translateY(-50%)",
           zIndex: 9,
           bgcolor: "rgba(0,0,0,0.72)",
@@ -272,12 +430,11 @@ export default function Features() {
           "&:hover": { bgcolor: "rgba(0,0,0,0.9)" },
           boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
         }}
-        aria-label="next"
       >
         <ArrowForwardIosIcon />
       </IconButton>
 
-      {/* Main container: sample image + hero content */}
+      {/* Main content */}
       <Box
         sx={{
           width: "100%",
@@ -290,7 +447,7 @@ export default function Features() {
           justifyContent: "center",
         }}
       >
-        {/* LEFT: Sample image with shape mask */}
+        {/* LEFT: Sample image */}
         <AnimatePresence initial={false} mode="wait">
           <motion.div
             key={current.sample}
@@ -302,7 +459,7 @@ export default function Features() {
               flex: isMd ? "0 0 100%" : "0 0 46%",
               display: "flex",
               justifyContent: "center",
-              //alignItems: "center",
+              minWidth: 0,
             }}
           >
             <Box
@@ -319,7 +476,6 @@ export default function Features() {
                   "linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.28))",
               }}
             >
-              {/* glossy overlay */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 0.18 }}
@@ -331,34 +487,34 @@ export default function Features() {
                   background:
                     "linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.00))",
                   mixBlendMode: "overlay",
+                  pointerEvents: "none",
                 }}
               />
 
-              {/* FIXED MOBILE IMAGE */}
-                          <motion.img
-                            src={current.sample}
-                            alt="sample"
-                            initial={{ scale: 1.08, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            transition={{ duration: 0.9 }}
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "cover",
-              
-                              clipPath: isSm
-                                ? "polygon(0 0, 100% 0, 100% 100%, 0 100%)"
-                                : "polygon(10% 5%, 100% 0%, 95% 100%, 5% 90%)",
-              
-                              WebkitClipPath: isSm
-                                ? "polygon(0 0, 100% 0, 100% 100%, 0 100%)"
-                                : "polygon(10% 5%, 100% 0%, 95% 100%, 5% 90%)",
-              
-                              transition: "clip-path 0.8s ease",
-                            }}
-                          />
+              <motion.img
+                src={current.sample}
+                alt={current.title}
+                onError={(event) => {
+                  event.currentTarget.style.opacity = "0";
+                }}
+                initial={{ scale: 1.08, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.9 }}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  clipPath: isSm
+                    ? "polygon(0 0, 100% 0, 100% 100%, 0 100%)"
+                    : "polygon(10% 5%, 100% 0%, 95% 100%, 5% 90%)",
+                  WebkitClipPath: isSm
+                    ? "polygon(0 0, 100% 0, 100% 100%, 0 100%)"
+                    : "polygon(10% 5%, 100% 0%, 95% 100%, 5% 90%)",
+                  transition: "clip-path 0.8s ease",
+                }}
+              />
 
-              {/* small floating badge */}
+              {/* Slide badge */}
               <motion.div
                 initial={{ y: 18, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -377,13 +533,14 @@ export default function Features() {
                   border: "1px solid rgba(255,255,255,0.06)",
                 }}
               >
-                {current.id}
+                {/* {current.id} */}
+                GD
               </motion.div>
             </Box>
           </motion.div>
         </AnimatePresence>
 
-        {/* RIGHT: Hero content */}
+        {/* RIGHT: Feature content */}
         <Box
           sx={{
             flex: isMd ? "0 0 100%" : "0 0 46%",
@@ -391,17 +548,25 @@ export default function Features() {
             flexDirection: "column",
             gap: 2.5,
             justifyContent: "center",
+            minWidth: 0,
           }}
         >
           {/* Title */}
-          <motion.div initial={{ opacity: 0, y: 36 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
+          <motion.div
+            key={`title-${current.id}`}
+            initial={{ opacity: 0, y: 36 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7 }}
+          >
             <Typography
+              component="h2"
               sx={{
                 fontSize: { xs: 24, md: 44 },
                 fontWeight: 900,
                 color: "#fff",
                 lineHeight: 1.02,
                 textShadow: "0 10px 30px rgba(0,0,0,0.6)",
+                overflowWrap: "anywhere",
               }}
             >
               <motion.span
@@ -416,7 +581,12 @@ export default function Features() {
           </motion.div>
 
           {/* Description */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.12 }}>
+          <motion.div
+            key={`description-${current.id}`}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.12 }}
+          >
             <Typography
               sx={{
                 color: "#e6e6e6",
@@ -430,32 +600,53 @@ export default function Features() {
             </Typography>
           </motion.div>
 
-          {/* Price-ish / features badges row */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.22 }}>
-            <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "center" }}>
-              <Box sx={{ px: 2, py: 0.7, borderRadius: 2, background: "rgba(255,255,255,0.04)" }}>
-                <Typography sx={{ fontSize: 13, color: "#fff", fontWeight: 700 }}>HD</Typography>
-              </Box>
-              <Box sx={{ px: 2, py: 0.7, borderRadius: 2, background: "rgba(255,255,255,0.04)" }}>
-                <Typography sx={{ fontSize: 13, color: "#fff", fontWeight: 700 }}>4K</Typography>
-              </Box>
-              <Box sx={{ px: 2, py: 0.7, borderRadius: 2, background: "rgba(255,255,255,0.04)" }}>
-                <Typography sx={{ fontSize: 13, color: "#fff", fontWeight: 700 }}>Gimbal</Typography>
-              </Box>
-              <Box sx={{ px: 2, py: 0.7, borderRadius: 2, background: "rgba(255,255,255,0.04)" }}>
-                <Typography sx={{ fontSize: 13, color: "#fff", fontWeight: 700 }}>Pro Lenses</Typography>
-              </Box>
+          {/* Feature badges — original design retained */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.22 }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                gap: 1.5,
+                flexWrap: "wrap",
+                alignItems: "center",
+              }}
+            >
+              {["HD", "4K", "Gimbal", "Pro Lenses"].map((label) => (
+                <Box
+                  key={label}
+                  sx={{
+                    px: 2,
+                    py: 0.7,
+                    borderRadius: 2,
+                    background: "rgba(255,255,255,0.04)",
+                  }}
+                >
+                  <Typography
+                    sx={{ fontSize: 13, color: "#fff", fontWeight: 700 }}
+                  >
+                    {label}
+                  </Typography>
+                </Box>
+              ))}
             </Box>
           </motion.div>
 
           {/* CTA card */}
-          <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.35 }}>
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.35 }}
+          >
             <Box
               sx={{
                 mt: 1.5,
                 p: { xs: 2, md: 3 },
                 borderRadius: 3,
-                background: "linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.32))",
+                background:
+                  "linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.32))",
                 border: "1px solid rgba(255,255,255,0.06)",
                 display: "flex",
                 flexDirection: { xs: "column", sm: "row" },
@@ -467,17 +658,36 @@ export default function Features() {
               }}
             >
               <Box>
-                <Typography sx={{ fontWeight: 800, color: "#fff", fontSize: { xs: 15, md: 18 } }}>
+                <Typography
+                  sx={{
+                    fontWeight: 800,
+                    color: "#fff",
+                    fontSize: { xs: 15, md: 18 },
+                  }}
+                >
                   What's included
                 </Typography>
-                <Typography sx={{ color: "#ccc", fontSize: 13, mt: 0.5 }}>
-                  HD photos, color correction, online gallery and 5 retouched images.
+
+                <Typography
+                  sx={{ color: "#ccc", fontSize: 13, mt: 0.5 }}
+                >
+                  HD photos, color correction, online gallery and 5 retouched
+                  images.
                 </Typography>
               </Box>
 
-              <Box sx={{ display: "flex", gap: 1 }}>
+              <Box sx={{ display: "flex", gap: 1, flexShrink: 0 }}>
                 <Button
                   variant="contained"
+                  onClick={() =>
+                    window.open(
+                      `https://wa.me/?text=${encodeURIComponent(
+                        `Hello Golden Dreams, I am interested in ${current.title}.`
+                      )}`,
+                      "_blank",
+                      "noopener,noreferrer"
+                    )
+                  }
                   sx={{
                     bgcolor: current.accent[0],
                     color: "#000",
@@ -485,6 +695,7 @@ export default function Features() {
                     px: 3,
                     py: 1,
                     borderRadius: 2,
+                    whiteSpace: "nowrap",
                     "&:hover": { filter: "brightness(0.95)" },
                   }}
                 >
@@ -493,6 +704,11 @@ export default function Features() {
 
                 <Button
                   variant="outlined"
+                  onClick={() =>
+                    document
+                      .getElementById("contact")
+                      ?.scrollIntoView({ behavior: "smooth" })
+                  }
                   sx={{
                     color: "#fff",
                     borderColor: "rgba(255,255,255,0.12)",
@@ -500,6 +716,7 @@ export default function Features() {
                     px: 2,
                     py: 0.8,
                     borderRadius: 2,
+                    whiteSpace: "nowrap",
                   }}
                 >
                   Learn More
@@ -510,7 +727,7 @@ export default function Features() {
         </Box>
       </Box>
 
-      {/* Indicators */}
+      {/* Slide indicators */}
       <Box
         sx={{
           position: "absolute",
@@ -523,24 +740,31 @@ export default function Features() {
           alignItems: "center",
         }}
       >
-        {slides.map((s, i) => {
-          const active = i === index;
+        {slides.map((slide, slideIndex) => {
+          const active = slideIndex === index;
+
           return (
             <Box
-              key={s.id}
-              onClick={() => {
-                setIndex(i);
-                stopAutoplay();
-                startAutoplay();
-              }}
+              key={slide.id}
+              component="button"
+              type="button"
+              aria-label={`Show slide ${slideIndex + 1}`}
+              aria-current={active ? "true" : undefined}
+              onClick={() => selectSlide(slideIndex)}
               sx={{
                 width: active ? 18 : 8,
                 height: 8,
+                p: 0,
+                border: 0,
                 borderRadius: 8,
-                background: active ? `linear-gradient(90deg, ${s.accent[0]}, ${s.accent[1]})` : "rgba(255,255,255,0.12)",
+                background: active
+                  ? `linear-gradient(90deg, ${slide.accent[0]}, ${slide.accent[1]})`
+                  : "rgba(255,255,255,0.35)",
                 cursor: "pointer",
                 transition: "all 0.25s",
-                boxShadow: active ? "0 6px 18px rgba(0,0,0,0.5)" : "none",
+                boxShadow: active
+                  ? "0 6px 18px rgba(0,0,0,0.5)"
+                  : "none",
               }}
             />
           );
@@ -548,17 +772,4 @@ export default function Features() {
       </Box>
     </Box>
   );
-
-  // helpers defined here to avoid lint warnings (start/stop functions used earlier)
-  function startAutoplay() {
-    if (autoplayRef.current) return;
-    autoplayRef.current = setInterval(() => {
-      setIndex((s) => (s + 1) % slideCount);
-    }, 5200);
-  }
-  function stopAutoplay() {
-    if (!autoplayRef.current) return;
-    clearInterval(autoplayRef.current);
-    autoplayRef.current = null;
-  }
 }

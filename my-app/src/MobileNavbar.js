@@ -481,7 +481,7 @@ export default function MobileNavbar() {
         transition={{ duration: 0.3 }}
         style={{
           position: "fixed",
-          left: "40%",
+          left: "41%",
           bottom: 22,
           transform: "translateX(-50%)",
           zIndex: 2000,
@@ -662,12 +662,12 @@ export default function MobileNavbar() {
               <Typography
                 sx={{
                   mt: 0.4,
-                  fontSize: "0.7rem",
+                  fontSize: "9px",
                   color: "rgba(255,241,168,0.58)",
                   letterSpacing: 1.3,
                 }}
               >
-                NAVIGATION
+                ROYAL • ELEGANT • LUXURY
               </Typography>
             </Box>
 
@@ -818,7 +818,7 @@ export default function MobileNavbar() {
                 color: "rgba(255,241,168,0.5)",
               }}
             >
-              Midnight elegance • Golden details
+              Golden Moments • Golden details
             </Typography>
           </Box>
         </Box>
