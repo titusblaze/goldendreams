@@ -20,7 +20,9 @@ import {
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useSwipeable } from "react-swipeable";
+import BookNow from "./BookNow";
 import { getAllApiData } from "./api";
+import { useNavigate } from "react-router-dom";
 
 /* -------------------------------------------------------
    FALLBACK PACKAGES
@@ -126,7 +128,7 @@ export default function Pricing() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [usingFallback, setUsingFallback] = useState(false);
-
+  const navigate = useNavigate();
   /* -----------------------------------------------------
      FETCH API DATA
 
@@ -771,33 +773,14 @@ export default function Pricing() {
                       gap: 1.5,
                     }}
                   >
-                    <Button
-                      fullWidth
-                      onClick={openEnquiry}
-                      variant="contained"
-                      sx={{
-                        minHeight: 48,
-                        px: 2.5,
-                        borderRadius: 2,
-                        textTransform: "none",
-                        fontWeight: 900,
-                        fontSize: 14,
-                        color: "#101010",
-                        background: gradient,
-                        boxShadow: `0 8px 26px ${currentSlide.accent[0]}30`,
-                        "&:hover": {
-                          background: gradient,
-                          filter: "brightness(1.08)",
-                          boxShadow: `0 10px 30px ${currentSlide.accent[0]}45`,
-                        },
-                      }}
-                    >
-                      Enquire Now
-                    </Button>
+                    <BookNow
+                        buttonText="Enquire Now"
+                        accentColor={currentSlide.accent[0]}
+                      />
 
                     <Button
                       fullWidth
-                      onClick={learnMore}
+                      onClick={() => navigate("/learn-more")}
                       variant="outlined"
                       sx={{
                         minHeight: 48,

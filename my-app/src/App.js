@@ -13,11 +13,12 @@ import Features from "./Features";
 import Live from "./Live";
 import Login from "./Login";
 import ContactUs from "./ContactUs";
-
+import ScrollToTop from "./ScrollToTop";
 import DashboardNavbar from "./DashboardNavbar";
 import LoginComponent from "./LoginComponent";
 import LoginFooter from "./LoginFooter";
 import Footer from "./Footer";
+import LearnMore from "./LearnMore"; // Import the LearnMore component
 
 // Keep your existing API function if you use it elsewhere.
 const fetchData = async () => {
@@ -48,7 +49,7 @@ function MidnightGoldAnimation() {
         size: 1.5 + Math.random() * 3.5,
         duration: 7 + Math.random() * 10,
         delay: Math.random() * 8,
-        drift: 18 + Math.random() * 55,
+        drift: 28 + Math.random() * 55,
         brightness: 0.35 + Math.random() * 0.65,
       })),
     []
@@ -307,6 +308,7 @@ function App() {
               position: "relative",
             }}
           >
+            <ScrollToTop />
             <Routes>
               <Route path="/" element={<Home />} />
 
@@ -329,6 +331,10 @@ function App() {
                 path="/live"
                 element={<Live />}
               />
+
+              <Route 
+              path="/learn-more" 
+              element={<LearnMore />} />
 
               <Route
                 path="/login"

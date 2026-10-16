@@ -334,8 +334,8 @@ export default function MobileNavbar() {
 
   const drawerItems = [
     { label: "Home", path: "/", icon: <HomeRoundedIcon /> },
-    { label: "Features", path: "/features", icon: <StarRoundedIcon /> },
     { label: "Pricing", path: "/pricing", icon: <InfoRoundedIcon /> },
+    { label: "Features", path: "/features", icon: <StarRoundedIcon /> },
     { label: "Contact", path: "/contact", icon: <ContactMailRoundedIcon /> },
     { label: "Live", path: "/live", icon: <AutoAwesomeRoundedIcon /> },
     { label: "Login", path: "/login", icon: <AccountCircleRoundedIcon /> },
@@ -426,7 +426,7 @@ export default function MobileNavbar() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  GOLDEN DREAM
+                  GOLDEN DREAMS
                 </Typography>
 
                 <Typography
@@ -481,7 +481,7 @@ export default function MobileNavbar() {
         transition={{ duration: 0.3 }}
         style={{
           position: "fixed",
-          left: "41%",
+          left: "42%",
           bottom: 22,
           transform: "translateX(-50%)",
           zIndex: 2000,

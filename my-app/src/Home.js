@@ -1,11 +1,9 @@
 import { Box } from '@mui/material';
 import Banner from './Banner';
-import CutCornerBox from './CutCornerBox';
-import ImageSlider from './ImageSlider';
 import ImageGallery from './ImageGallery';
-import GoogleImage from './GoogleImage';
 import GoogleReview from './GoogleReview';
 import AboutUs from './AboutUs';
+import ReliableCustomer from './ReliableCustomer';
 
 
 
@@ -17,11 +15,9 @@ const Home = () => {
       
       <Banner />
       <AboutUs />
-        {/* <ImageSlider/> */}
-        {/* <GoogleImage/> */}
         <ImageGallery/>
+        <ReliableCustomer/>
         <GoogleReview/>
-      {/* <CutCornerBox /> */}
     </Box>
   );
 };
