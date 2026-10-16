@@ -1,63 +1,64 @@
-import React, { useEffect, useState } from "react";
+
+import React, { useEffect } from "react";
 import {
   Avatar,
   Box,
   Button,
-  CircularProgress,
   IconButton,
-  TextField,
   Typography,
 } from "@mui/material";
 
 import PhoneIcon from "@mui/icons-material/Phone";
 import MailIcon from "@mui/icons-material/Mail";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
-import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import ShareIcon from "@mui/icons-material/Share";
 
 import { useQuery } from "@tanstack/react-query";
-import emailjs from "emailjs-com";
 import { motion } from "framer-motion";
 
+import { getAllApiData } from "./api";
 import Logo from "../src/assets/image/logo512.png";
+import BookNow from "./BookNow";
 import "./App.css";
 
 // --------------------------------------------------
-// GOOGLE APPS SCRIPT API
+// MIDNIGHT GOLD THEME
 // --------------------------------------------------
-
-const API_URL =
-  "https://script.google.com/macros/s/AKfycbxUgaJGstTiqyKIfDQzgv5zgR0OVROWCQUMdwv2pMMp-rMq1VP_4vkJDtltQtSr1poR/exec";
-
-// Configure these with your actual EmailJS credentials.
-const SERVICE_ID = "your_service_id";
-const TEMPLATE_ID = "your_template_id";
-const PUBLIC_KEY = "your_public_key";
-
-const EMAILJS_CONFIGURED = [
-  SERVICE_ID,
-  TEMPLATE_ID,
-  PUBLIC_KEY,
-].every((value) => value && !value.startsWith("your_"));
 
 const GOLD = "#E8C56E";
 const GOLD_LIGHT = "#FFE6A3";
 const MUTED = "#C5C0B4";
 
+// --------------------------------------------------
+// FETCH CONTACT DATA THROUGH COMMON API.JS
+// --------------------------------------------------
+
 const fetchData = async () => {
-  const response = await fetch(API_URL);
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch contact details.");
-  }
-
-  const result = await response.json();
+  const result = await getAllApiData();
 
   if (!Array.isArray(result)) {
-    throw new Error("The API did not return a valid contact list.");
+    throw new Error(
+      "The API did not return a valid contact list."
+    );
   }
 
   return result;
+};
+
+// --------------------------------------------------
+// PHONE NUMBER HELPER
+// --------------------------------------------------
+
+const getPhoneNumber = (value) => {
+  let phone = String(value || "").replace(/\D/g, "");
+
+  if (phone.length === 10) {
+    phone = `91${phone}`;
+  } else if (phone.length === 11 && phone.startsWith("0")) {
+    phone = `91${phone.slice(1)}`;
+  }
+
+  return phone;
 };
 
 // --------------------------------------------------
@@ -120,41 +121,29 @@ const glassCardSx = {
 };
 
 // --------------------------------------------------
-// TEXT FIELD STYLING
+// BRANCH LINK STYLING
 // --------------------------------------------------
 
-const textFieldSx = {
-  "& .MuiInputLabel-root": {
-    color: "#BDB5A4",
+const branchLinkSx = {
+  color: GOLD_LIGHT,
+  textTransform: "none",
+  fontSize: 13,
+  justifyContent: "flex-start",
+  px: 0,
+  minWidth: 0,
+  maxWidth: "100%",
+  lineHeight: 1.6,
+  overflowWrap: "anywhere",
+
+  "& .MuiButton-startIcon": {
+    color: GOLD,
+    mr: 1,
+    flexShrink: 0,
   },
 
-  "& .MuiInputLabel-root.Mui-focused": {
-    color: GOLD_LIGHT,
-  },
-
-  "& .MuiOutlinedInput-root": {
-    color: "#FFF9EC",
-    borderRadius: "12px",
-    backgroundColor: "rgba(0, 0, 0, 0.17)",
-
-    "& fieldset": {
-      borderColor: "rgba(232, 197, 110, 0.23)",
-    },
-
-    "&:hover fieldset": {
-      borderColor: "rgba(232, 197, 110, 0.58)",
-    },
-
-    "&.Mui-focused fieldset": {
-      borderColor: GOLD,
-      borderWidth: "1px",
-      boxShadow: "0 0 12px rgba(232, 197, 110, 0.08)",
-    },
-  },
-
-  "& .MuiFormHelperText-root": {
-    color: "#E9B7A5",
-    mx: 0.5,
+  "&:hover": {
+    color: "#FFF2C9",
+    background: "rgba(232,197,110,0.055)",
   },
 };
 
@@ -162,179 +151,65 @@ const textFieldSx = {
 // CONTACT US
 // --------------------------------------------------
 
-function ContactUs() {
-  const [formData, setFormData] = useState({
-    name: "",
-    mobile: "",
-    email: "",
-    message: "",
-  });
-
-  const [sending, setSending] = useState(false);
-
-  // Scroll to top whenever this page mounts, including refresh.
+export default function ContactUs() {
+  // Scroll to the top whenever the page mounts.
   useEffect(() => {
-    window.scrollTo(0, 0);
+    window.scrollTo({
+      top: 0,
+      behavior: "auto",
+    });
   }, []);
 
-  // Fetch contact information only once.
+  // Load data through the shared API file.
   const {
     data = [],
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["goldendreams"],
+    queryKey: ["goldendreams-contact"],
     queryFn: fetchData,
     staleTime: 1000 * 60 * 5,
   });
 
-  const persons = data.filter((item) => String(item.Id) === "9");
-  const branches = data.filter((item) => String(item.Id) === "10");
-  const contactInfo = data.find((item) => String(item.Id) === "12");
+  // Contact person records.
+  const persons = data.filter(
+    (item) => String(item.Id) === "6"
+  );
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-
-    setFormData((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
-  };
-
-  // --------------------------------------------------
-  // SEND CONTACT FORM
-  // --------------------------------------------------
-
-  const sendEmail = async (event) => {
-    event.preventDefault();
-
-    if (sending) return;
-
-    if (!formData.name.trim() || !formData.mobile.trim() ||
-        !formData.email.trim() || !formData.message.trim()) {
-      alert("Please fill in all the fields.");
-      return;
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      alert("Please enter a valid email address.");
-      return;
-    }
-
-    if (!contactInfo?.Email) {
-      alert("The contact email address is unavailable. Please try WhatsApp.");
-      return;
-    }
-
-    setSending(true);
-
-    try {
-      if (EMAILJS_CONFIGURED) {
-        await emailjs.send(
-          SERVICE_ID,
-          TEMPLATE_ID,
-          {
-            name: formData.name.trim(),
-            mobile: formData.mobile.trim(),
-            email: formData.email.trim(),
-            message: formData.message.trim(),
-          },
-          PUBLIC_KEY
-        );
-
-        alert("Your message has been sent successfully!");
-
-        setFormData({
-          name: "",
-          mobile: "",
-          email: "",
-          message: "",
-        });
-      } else {
-        // Fallback until actual EmailJS credentials are configured.
-        const subject = encodeURIComponent(
-          `Contact message from ${formData.name.trim()}`
-        );
-
-        const body = encodeURIComponent(
-          `Name: ${formData.name}\n` +
-          `Mobile: ${formData.mobile}\n` +
-          `Email: ${formData.email}\n\n` +
-          `Message:\n${formData.message}`
-        );
-
-        window.location.href =
-          `mailto:${contactInfo.Email}?subject=${subject}&body=${body}`;
-      }
-    } catch (err) {
-      console.error("Contact form error:", err);
-      alert("Unable to send your message. Please try WhatsApp.");
-    } finally {
-      setSending(false);
-    }
-  };
-
-  // --------------------------------------------------
-  // WHATSAPP
-  // --------------------------------------------------
-
-  const sendWhatsApp = () => {
-    if (!formData.name.trim() || !formData.mobile.trim() ||
-        !formData.message.trim()) {
-      alert("Please enter your name, phone number and message.");
-      return;
-    }
-
-    const rawPhone = String(contactInfo?.Phone || "").replace(/\D/g, "");
-
-    if (!rawPhone) {
-      alert("The WhatsApp contact number is unavailable.");
-      return;
-    }
-
-    const phone = rawPhone.startsWith("91")
-      ? rawPhone
-      : `91${rawPhone}`;
-
-    const message =
-      `Hello Golden Dream,\n\n` +
-      `Name: ${formData.name}\n` +
-      `Phone: ${formData.mobile}\n` +
-      `Email: ${formData.email || "Not provided"}\n` +
-      `Message: ${formData.message}`;
-
-    window.open(
-      `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
-      "_blank",
-      "noopener,noreferrer"
-    );
-  };
+  // Branch records.
+  const branches = data.filter(
+    (item) => String(item.Id) === "7"
+  );
 
   // --------------------------------------------------
   // SHARE CONTACT DETAILS
   // --------------------------------------------------
 
   const handleShare = async (item) => {
-    const message =
-      `Golden Dream\n\n` +
-      `${item.LabelText || ""}\n` +
-      `${item.LabelText1 || ""}\n` +
-      `Phone: ${item.Phone || ""}\n` +
-      `Email: ${item.Email || ""}\n` +
-      `Address: ${item.LabelText2 || ""}\n` +
-      `Location: ${item.Location || ""}`;
+    const message = [
+      "Golden Dreams",
+      "",
+      item.LabelText || "",
+      item.LabelText1 || "",
+      `Phone: ${item.Phone || ""}`,
+      `Email: ${item.Email || ""}`,
+      `Address: ${item.LabelText2 || ""}`,
+      `Location: ${item.Location || ""}`,
+    ].join("\n");
 
     try {
       if (navigator.share) {
         await navigator.share({
-          title: item.LabelText || "Golden Dream Contact",
+          title: item.LabelText || "Golden Dreams Contact",
           text: message,
         });
       } else if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(message);
-        alert("Contact details copied.");
+        window.alert("Contact details copied.");
       } else {
-        alert("Sharing is not supported on this device.");
+        window.alert(
+          "Sharing is not supported on this device."
+        );
       }
     } catch (err) {
       if (err.name !== "AbortError") {
@@ -361,7 +236,7 @@ function ContactUs() {
       >
         <motion.img
           src={Logo}
-          alt="Golden Dream"
+          alt="Golden Dreams"
           style={{
             width: 150,
             height: 150,
@@ -406,6 +281,17 @@ function ContactUs() {
           Failed to load contact details.
         </Typography>
 
+        <Typography
+          sx={{
+            color: MUTED,
+            fontSize: 12,
+            maxWidth: 450,
+            overflowWrap: "anywhere",
+          }}
+        >
+          {error.message}
+        </Typography>
+
         <Button
           variant="outlined"
           onClick={() => window.location.reload()}
@@ -413,6 +299,10 @@ function ContactUs() {
             color: GOLD,
             borderColor: GOLD,
             textTransform: "none",
+            "&:hover": {
+              borderColor: GOLD_LIGHT,
+              background: "rgba(232,197,110,0.08)",
+            },
           }}
         >
           Refresh Page
@@ -429,21 +319,20 @@ function ContactUs() {
     <Box
       sx={{
         width: "100%",
-        mt: { xs: "50px", md: "40px" }, // Mobile only
+        mt: { xs: "50px", md: "40px" },
         minHeight: "100vh",
         boxSizing: "border-box",
         position: "relative",
         overflow: "hidden",
         color: "#FFF8E8",
-
-        background:'transparent',
-
+        background: "transparent",
         pt: { xs: 5, sm: 7, md: 9 },
         pb: { xs: 6, md: 10 },
         px: { xs: "5%", sm: 3, md: 5 },
       }}
     >
-      {/* Decorative background glow */}
+      {/* DECORATIVE BACKGROUND GLOW */}
+
       <Box
         sx={{
           position: "absolute",
@@ -482,12 +371,18 @@ function ContactUs() {
         }}
       >
         {/* PAGE HEADING */}
+
         <motion.div
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55 }}
         >
-          <Box sx={{ textAlign: "center", mb: { xs: 5, md: 7 } }}>
+          <Box
+            sx={{
+              textAlign: "center",
+              mb: { xs: 5, md: 7 },
+            }}
+          >
             <Typography
               sx={{
                 color: GOLD,
@@ -539,15 +434,21 @@ function ContactUs() {
                 color: MUTED,
               }}
             >
-              Have a question or need assistance? Connect with our team using
-              the contact details below or send us a message.
+              Have a question or planning a special occasion?
+              Contact our team or send a booking enquiry.
+              We would love to help you preserve your precious
+              memories.
             </Typography>
           </Box>
         </motion.div>
 
         {/* CONTACT PERSON CARDS */}
+
         {persons.length > 0 && (
-          <Box component="section" sx={{ mb: { xs: 6, md: 9 } }}>
+          <Box
+            component="section"
+            sx={{ mb: { xs: 6, md: 9 } }}
+          >
             <Typography
               component="h2"
               sx={{
@@ -561,195 +462,217 @@ function ContactUs() {
               Get in Touch
             </Typography>
 
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "minmax(0, 1fr)",
+                  sm: "repeat(auto-fit, minmax(280px, 320px))",
+                  md: "repeat(auto-fit, minmax(280px, 340px))",
+                },
+                gap: { xs: 2, sm: 3 },
+                justifyContent: "center",
+                alignItems: "stretch",
+              }}
+            >
+              {persons.map((item, index) => {
+                const phone = getPhoneNumber(item.Phone);
 
-              <Box
-                sx={{
-                  display: "grid",
-
-                  // Adjust contact person card width here
-                  gridTemplateColumns: {
-                    xs: "minmax(0, 1fr)",       // Mobile: full width
-                    sm: "repeat(auto-fit, minmax(280px, 320px))", // Tablet
-                    md: "repeat(auto-fit, minmax(280px, 340px))", // Desktop
-                  },
-
-                  gap: { xs: 2, sm: 3 },
-                  justifyContent: "center",
-                  alignItems: "stretch",
-                }}
-              >
-
-              {persons.map((item, index) => (
-                <motion.div
-                  key={`${item.Id}-${item.Phone || index}`}
-                  initial={{ opacity: 0, y: 22 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, amount: 0.15 }}
-                  transition={{ duration: 0.45, delay: index * 0.1 }}
-                  style={{ minWidth: 0, height: "100%" }}
-                >
-                  <Box
-                    sx={{
-                      ...glassCardSx,
-                      textAlign: "center",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
+                return (
+                  <motion.div
+                    key={`${item.Id}-${item.Phone || index}`}
+                    initial={{ opacity: 0, y: 22 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, amount: 0.15 }}
+                    transition={{
+                      duration: 0.45,
+                      delay: index * 0.1,
                     }}
+                    style={{ minWidth: 0, height: "100%" }}
                   >
                     <Box
                       sx={{
-                        p: "4px",
-                        mb: 2,
-                        borderRadius: "50%",
-                        border: "1px solid rgba(232,197,110,0.75)",
-                        boxShadow:
-                          "0 0 25px rgba(232,197,110,0.12)",
-                      }}
-                    >
-                      <Avatar
-                        src={item.link || undefined}
-                        alt={item.LabelText || "Contact"}
-                        sx={{
-                          width: { xs: 100, sm: 115 },
-                          height: { xs: 100, sm: 115 },
-                          bgcolor: "#211B10",
-                          border: "2px solid rgba(255,230,163,0.13)",
-                        }}
-                      />
-                    </Box>
-
-                    <Typography
-                      sx={{
-                        color: GOLD_LIGHT,
-                        fontSize: { xs: 20, sm: 22 },
-                        fontWeight: 750,
-                        overflowWrap: "anywhere",
-                      }}
-                    >
-                      {item.LabelText}
-                    </Typography>
-
-                    <Typography
-                      sx={{
-                        color: MUTED,
-                        fontSize: 13,
-                        mt: 0.5,
-                        overflowWrap: "anywhere",
-                      }}
-                    >
-                      {item.LabelText1}
-                    </Typography>
-
-                    {item.LabelText2 && (
-                      <Typography
-                        sx={{
-                          color: "#9D9789",
-                          fontSize: 12,
-                          mt: 0.5,
-                          mb: 1.5,
-                          overflowWrap: "anywhere",
-                        }}
-                      >
-                        {item.LabelText2}
-                      </Typography>
-                    )}
-
-                    <Box
-                      sx={{
+                        ...glassCardSx,
+                        textAlign: "center",
                         display: "flex",
-                        alignItems: "flex-start",
-                        justifyContent: "center",
-                        gap: 1,
-                        mt: 1,
-                        maxWidth: "100%",
+                        flexDirection: "column",
+                        alignItems: "center",
                       }}
                     >
-                      <PhoneIcon
-                        sx={{ color: GOLD, fontSize: 18, mt: 0.25 }}
-                      />
-
-                      <Typography
-                        component="a"
-                        href={`tel:+91${item.Phone}`}
+                      <Box
                         sx={{
-                          color: "#F0E8D7",
-                          fontSize: 13,
-                          textDecoration: "none",
-                          overflowWrap: "anywhere",
-                          "&:hover": { color: GOLD },
-                        }}
-                      >
-                        +91 {item.Phone}
-                      </Typography>
-                    </Box>
-
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        justifyContent: "center",
-                        gap: 1,
-                        mt: 1,
-                        maxWidth: "100%",
-                      }}
-                    >
-                      <MailIcon
-                        sx={{ color: GOLD, fontSize: 18, mt: 0.25 }}
-                      />
-
-                      <Typography
-                        component="a"
-                        href={`mailto:${item.Email}`}
-                        sx={{
-                          color: "#F0E8D7",
-                          fontSize: 12,
-                          textDecoration: "none",
-                          overflowWrap: "anywhere",
-                          "&:hover": { color: GOLD },
-                        }}
-                      >
-                        {item.Email}
-                      </Typography>
-                    </Box>
-
-                    <Button
-                      component="a"
-                      href={`tel:+91${item.Phone}`}
-                      startIcon={<PhoneIcon />}
-                      sx={{
-                        mt: 2.5,
-                        minWidth: 145,
-                        py: 1,
-                        px: 3,
-                        borderRadius: "12px",
-                        color: "#17120A",
-                        fontWeight: 750,
-                        textTransform: "none",
-                        background:
-                          "linear-gradient(110deg, #F9E3A0, #D8AE51)",
-                        boxShadow:
-                          "0 4px 16px rgba(218,165,60,0.12)",
-                        "&:hover": {
-                          background:
-                            "linear-gradient(110deg, #FFF0BF, #E5BF65)",
+                          p: "4px",
+                          mb: 2,
+                          borderRadius: "50%",
+                          border:
+                            "1px solid rgba(232,197,110,0.75)",
                           boxShadow:
-                            "0 6px 22px rgba(218,165,60,0.25)",
-                        },
-                      }}
-                    >
-                      Call Now
-                    </Button>
-                  </Box>
-                </motion.div>
-              ))}
+                            "0 0 25px rgba(232,197,110,0.12)",
+                        }}
+                      >
+                        <Avatar
+                          src={item.link || undefined}
+                          alt={item.LabelText || "Contact"}
+                          sx={{
+                            width: { xs: 100, sm: 115 },
+                            height: { xs: 100, sm: 115 },
+                            bgcolor: "#211B10",
+                            border:
+                              "2px solid rgba(255,230,163,0.13)",
+                          }}
+                        />
+                      </Box>
+
+                      <Typography
+                        sx={{
+                          color: GOLD_LIGHT,
+                          fontSize: { xs: 20, sm: 22 },
+                          fontWeight: 750,
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        {item.LabelText}
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          color: MUTED,
+                          fontSize: 13,
+                          mt: 0.5,
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        {item.LabelText1}
+                      </Typography>
+
+                      {item.LabelText2 && (
+                        <Typography
+                          sx={{
+                            color: "#9D9789",
+                            fontSize: 12,
+                            mt: 0.5,
+                            mb: 1.5,
+                            overflowWrap: "anywhere",
+                          }}
+                        >
+                          {item.LabelText2}
+                        </Typography>
+                      )}
+
+                      {phone && (
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            justifyContent: "center",
+                            gap: 1,
+                            mt: 1,
+                            maxWidth: "100%",
+                          }}
+                        >
+                          <PhoneIcon
+                            sx={{
+                              color: GOLD,
+                              fontSize: 18,
+                              mt: 0.25,
+                            }}
+                          />
+
+                          <Typography
+                            component="a"
+                            href={`tel:+${phone}`}
+                            sx={{
+                              color: "#F0E8D7",
+                              fontSize: 13,
+                              textDecoration: "none",
+                              overflowWrap: "anywhere",
+                              "&:hover": { color: GOLD },
+                            }}
+                          >
+                            +{phone}
+                          </Typography>
+                        </Box>
+                      )}
+
+                      {item.Email && (
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            justifyContent: "center",
+                            gap: 1,
+                            mt: 1,
+                            maxWidth: "100%",
+                          }}
+                        >
+                          <MailIcon
+                            sx={{
+                              color: GOLD,
+                              fontSize: 18,
+                              mt: 0.25,
+                            }}
+                          />
+
+                          <Typography
+                            component="a"
+                            href={`mailto:${item.Email}`}
+                            sx={{
+                              color: "#F0E8D7",
+                              fontSize: 12,
+                              textDecoration: "none",
+                              overflowWrap: "anywhere",
+                              "&:hover": { color: GOLD },
+                            }}
+                          >
+                            {item.Email}
+                          </Typography>
+                        </Box>
+                      )}
+
+                      {phone && (
+                        <Button
+                          component="a"
+                          href={`tel:+${phone}`}
+                          startIcon={<PhoneIcon />}
+                          sx={{
+                            mt: 2.5,
+                            minWidth: 145,
+                            py: 1,
+                            px: 3,
+                            borderRadius: "12px",
+                            color: "#17120A",
+                            fontWeight: 750,
+                            textTransform: "none",
+                            background:
+                              "linear-gradient(110deg, #F9E3A0, #D8AE51)",
+                            boxShadow:
+                              "0 4px 16px rgba(218,165,60,0.12)",
+                            "&:hover": {
+                              background:
+                                "linear-gradient(110deg, #FFF0BF, #E5BF65)",
+                              boxShadow:
+                                "0 6px 22px rgba(218,165,60,0.25)",
+                            },
+                          }}
+                        >
+                          Call Now
+                        </Button>
+                      )}
+                    </Box>
+                  </motion.div>
+                );
+              })}
             </Box>
           </Box>
         )}
 
         {/* BRANCH CONTACT CARDS */}
+
         {branches.length > 0 && (
-          <Box component="section" sx={{ mb: { xs: 6, md: 9 } }}>
+          <Box
+            component="section"
+            sx={{ mb: { xs: 6, md: 9 } }}
+          >
             <Typography
               component="h2"
               sx={{
@@ -785,142 +708,171 @@ function ContactUs() {
                 alignItems: "stretch",
               }}
             >
-              {branches.map((item, index) => (
-                <motion.div
-                  key={`${item.Id}-${item.Phone || index}`}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, amount: 0.15 }}
-                  transition={{ duration: 0.45, delay: index * 0.1 }}
-                  style={{ minWidth: 0, height: "100%" }}
-                >
-                  <Box sx={glassCardSx}>
-                    <IconButton
-                      aria-label="Share branch details"
-                      onClick={() => handleShare(item)}
-                      sx={{
-                        position: "absolute",
-                        top: 12,
-                        right: 12,
-                        color: GOLD,
-                        border: "1px solid rgba(232,197,110,0.25)",
-                        background: "rgba(232,197,110,0.05)",
-                        "&:hover": {
-                          color: GOLD_LIGHT,
-                          background: "rgba(232,197,110,0.14)",
-                        },
-                      }}
-                    >
-                      <ShareIcon fontSize="small" />
-                    </IconButton>
+              {branches.map((item, index) => {
+                const phone = getPhoneNumber(item.Phone);
 
-                    <Typography
-                      sx={{
-                        color: GOLD_LIGHT,
-                        fontSize: { xs: 19, sm: 21 },
-                        fontWeight: 750,
-                        pr: 4,
-                        overflowWrap: "anywhere",
-                      }}
-                    >
-                      {item.LabelText}
-                    </Typography>
-
-                    <Typography
-                      sx={{
-                        color: MUTED,
-                        fontSize: 13,
-                        mt: 1,
-                        mb: 2,
-                        lineHeight: 1.8,
-                        overflowWrap: "anywhere",
-                      }}
-                    >
-                      {item.LabelText1}
-                    </Typography>
-
-                    <Box
-                      sx={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 1.2,
-                        alignItems: "flex-start",
-                      }}
-                    >
-                      <Button
-                        component="a"
-                        href={`tel:+91${item.Phone}`}
-                        startIcon={<PhoneIcon />}
-                        sx={branchLinkSx}
-                      >
-                        +91 {item.Phone}
-                      </Button>
-
-                      <Button
-                        component="a"
-                        href={`mailto:${item.Email}`}
-                        startIcon={<MailIcon />}
+                return (
+                  <motion.div
+                    key={`${item.Id}-${item.Phone || index}`}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, amount: 0.15 }}
+                    transition={{
+                      duration: 0.45,
+                      delay: index * 0.1,
+                    }}
+                    style={{ minWidth: 0, height: "100%" }}
+                  >
+                    <Box sx={glassCardSx}>
+                      <IconButton
+                        aria-label="Share branch details"
+                        onClick={() => handleShare(item)}
                         sx={{
-                          ...branchLinkSx,
-                          maxWidth: "100%",
-                          "& .MuiButton-startIcon": {
-                            flexShrink: 0,
-                          },
-                          "& .MuiButton-endIcon": {
-                            flexShrink: 0,
+                          position: "absolute",
+                          top: 12,
+                          right: 12,
+                          color: GOLD,
+                          border:
+                            "1px solid rgba(232,197,110,0.25)",
+                          background:
+                            "rgba(232,197,110,0.05)",
+                          "&:hover": {
+                            color: GOLD_LIGHT,
+                            background:
+                              "rgba(232,197,110,0.14)",
                           },
                         }}
                       >
-                        <Box
-                          component="span"
-                          sx={{
-                            overflowWrap: "anywhere",
-                            whiteSpace: "normal",
-                            textAlign: "left",
-                          }}
-                        >
-                          {item.Email}
-                        </Box>
-                      </Button>
+                        <ShareIcon fontSize="small" />
+                      </IconButton>
 
-                      {item.LabelText2 && (
-                        <Button
-                          component="a"
-                          href={item.Location || undefined}
-                          target={item.Location ? "_blank" : undefined}
-                          rel={item.Location ? "noopener noreferrer" : undefined}
-                          startIcon={<LocationOnIcon />}
-                          sx={{
-                            ...branchLinkSx,
-                            alignItems: "flex-start",
-                            "& .MuiButton-startIcon": {
-                              mt: "3px",
-                              flexShrink: 0,
-                            },
-                          }}
-                        >
-                          <Box
-                            component="span"
+                      <Typography
+                        sx={{
+                          color: GOLD_LIGHT,
+                          fontSize: { xs: 19, sm: 21 },
+                          fontWeight: 750,
+                          pr: 4,
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        {item.LabelText}
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          color: GOLD_LIGHT,
+                          fontSize: 18,
+                          fontWeight: 700,
+                          mt: 1,
+                          mb: 2,
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "flex-start",
+                          lineHeight: 1.8,
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        {item.LabelText1}
+                      </Typography>
+
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 1.2,
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        {phone && (
+                          <Button
+                            component="a"
+                            href={`tel:+${phone}`}
+                            startIcon={<PhoneIcon />}
+                            sx={branchLinkSx}
+                          >
+                            +{phone}
+                          </Button>
+                        )}
+
+                        {item.Email && (
+                          <Button
+                            component="a"
+                            href={`mailto:${item.Email}`}
+                            startIcon={<MailIcon />}
                             sx={{
-                              whiteSpace: "normal",
-                              textAlign: "left",
-                              overflowWrap: "anywhere",
+                              ...branchLinkSx,
+                              maxWidth: "100%",
+                              "& .MuiButton-startIcon": {
+                                flexShrink: 0,
+                              },
                             }}
                           >
-                            {item.LabelText2}
-                          </Box>
-                        </Button>
-                      )}
+                            <Box
+                              component="span"
+                              sx={{
+                                overflowWrap: "anywhere",
+                                whiteSpace: "normal",
+                                textAlign: "left",
+                              }}
+                            >
+                              {item.Email}
+                            </Box>
+                          </Button>
+                        )}
+
+                        {item.LabelText2 && (
+                          <Button
+                            component={item.Location ? "a" : "button"}
+                            href={item.Location || undefined}
+                            target={
+                              item.Location ? "_blank" : undefined
+                            }
+                            rel={
+                              item.Location
+                                ? "noopener noreferrer"
+                                : undefined
+                            }
+                            startIcon={<LocationOnIcon />}
+                            sx={{
+                              ...branchLinkSx,
+                              alignItems: "flex-start",
+                              "& .MuiButton-startIcon": {
+                                mt: "3px",
+                                flexShrink: 0,
+                              },
+                            }}
+                          >
+                            <Box
+                              component="span"
+                              sx={{
+                                whiteSpace: "normal",
+                                textAlign: "left",
+                                overflowWrap: "anywhere",
+                              }}
+                            >
+                              {item.LabelText2}
+                            </Box>
+                          </Button>
+                        )}
+                      </Box>
                     </Box>
-                  </Box>
-                </motion.div>
-              ))}
+                  </motion.div>
+                );
+              })}
             </Box>
           </Box>
         )}
 
-        {/* CONTACT FORM */}
-        <Box component="section" sx={{ width: "100%" }}>
+        {/* BOOKING & ENQUIRY SECTION
+            Reuses the existing BookNow.js component.
+            Booking submission and Sheet2 logic are unchanged.
+        */}
+
+        <Box
+          component="section"
+          id="booking-enquiry"
+          sx={{ width: "100%" }}
+        >
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -929,10 +881,14 @@ function ContactUs() {
           >
             <Box
               sx={{
-                width: { xs: "100%", sm: "min(100%, 580px)" },
+                width: { xs: "100%", sm: "min(100%, 700px)" },
                 mx: "auto",
                 boxSizing: "border-box",
-                p: { xs: 2.5, sm: 4, md: 4.5 },
+                p: { xs: 3, sm: 4.5, md: 5 },
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                textAlign: "center",
                 borderRadius: { xs: "22px", sm: "28px" },
 
                 background: `
@@ -956,158 +912,69 @@ function ContactUs() {
                 `,
               }}
             >
-              <Box sx={{ textAlign: "center", mb: 3 }}>
-                <Typography
-                  component="h2"
-                  sx={{
-                    color: GOLD_LIGHT,
-                    fontSize: { xs: 25, sm: 31 },
-                    fontWeight: 800,
-                  }}
-                >
-                  Send Us a Message
-                </Typography>
+              <Typography
+                sx={{
+                  color: GOLD,
+                  fontSize: 11,
+                  letterSpacing: { xs: 3, sm: 4 },
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  mb: 1.5,
+                }}
+              >
+                LET'S CREATE SOMETHING BEAUTIFUL
+              </Typography>
 
-                <Typography
-                  sx={{
-                    color: MUTED,
-                    fontSize: 13,
-                    mt: 1,
-                    lineHeight: 1.7,
-                  }}
-                >
-                  Fill in the details below and our team will get in touch.
-                </Typography>
+              <Typography
+                component="h2"
+                sx={{
+                  color: GOLD_LIGHT,
+                  fontSize: { xs: 25, sm: 31, md: 35 },
+                  fontWeight: 800,
+                  lineHeight: 1.25,
+                }}
+              >
+                Book Your Special Moments
+              </Typography>
+
+              <Box
+                sx={{
+                  width: 65,
+                  height: 2,
+                  borderRadius: 5,
+                  my: 2,
+                  background:
+                    "linear-gradient(90deg, transparent, #E8C56E, transparent)",
+                }}
+              />
+
+              <Typography
+                sx={{
+                  color: MUTED,
+                  maxWidth: 480,
+                  fontSize: { xs: 13, sm: 14 },
+                  lineHeight: 1.9,
+                  mb: 3,
+                }}
+              >
+                Tell us about your photography, videography, album
+                design, or special event requirements. Submit your
+                enquiry through our booking form and continue to
+                WhatsApp to send your message to Golden Dreams.
+              </Typography>
+
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  width: "100%",
+                }}
+              >
+                <BookNow
+                  buttonText="Book Now / Send Enquiry"
+                />
               </Box>
-
-              <form onSubmit={sendEmail}>
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 1.5,
-                  }}
-                >
-                  <TextField
-                    fullWidth
-                    required
-                    name="name"
-                    label="Your Name"
-                    autoComplete="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    sx={textFieldSx}
-                  />
-
-                  <TextField
-                    fullWidth
-                    required
-                    name="mobile"
-                    label="Phone Number"
-                    type="tel"
-                    autoComplete="tel"
-                    value={formData.mobile}
-                    onChange={handleChange}
-                    inputProps={{ maxLength: 20 }}
-                    sx={textFieldSx}
-                  />
-
-                  <TextField
-                    fullWidth
-                    required
-                    name="email"
-                    label="Email Address"
-                    type="email"
-                    autoComplete="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    sx={textFieldSx}
-                  />
-
-                  <TextField
-                    fullWidth
-                    required
-                    name="message"
-                    label="Your Message"
-                    multiline
-                    minRows={4}
-                    maxRows={8}
-                    value={formData.message}
-                    onChange={handleChange}
-                    sx={textFieldSx}
-                  />
-                </Box>
-
-                {/* RESPONSIVE ACTION BUTTONS */}
-                <Box
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns: {
-                      xs: "1fr",
-                      sm: "repeat(2, minmax(0, 1fr))",
-                    },
-                    gap: 1.5,
-                    mt: 3,
-                  }}
-                >
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    disabled={sending}
-                    startIcon={
-                      sending ? (
-                        <CircularProgress size={17} color="inherit" />
-                      ) : (
-                        <MailIcon />
-                      )
-                    }
-                    sx={{
-                      minHeight: 48,
-                      borderRadius: "13px",
-                      color: "#17120A",
-                      fontWeight: 750,
-                      textTransform: "none",
-                      background:
-                        "linear-gradient(110deg, #F9E3A0, #D8AE51)",
-                      boxShadow: "0 5px 18px rgba(218,165,60,0.12)",
-                      "&:hover": {
-                        background:
-                          "linear-gradient(110deg, #FFF0BF, #E5BF65)",
-                        boxShadow:
-                          "0 6px 24px rgba(218,165,60,0.22)",
-                      },
-                      "&.Mui-disabled": {
-                        color: "#6C5B35",
-                        background: "rgba(218,165,60,0.2)",
-                      },
-                    }}
-                  >
-                    {sending ? "Sending..." : "Send Message"}
-                  </Button>
-
-                  <Button
-                    type="button"
-                    onClick={sendWhatsApp}
-                    variant="outlined"
-                    startIcon={<WhatsAppIcon />}
-                    sx={{
-                      minHeight: 48,
-                      borderRadius: "13px",
-                      color: "#D7F5DC",
-                      borderColor: "rgba(91, 202, 121, 0.45)",
-                      background: "rgba(35, 139, 69, 0.10)",
-                      fontWeight: 700,
-                      textTransform: "none",
-                      "&:hover": {
-                        background: "rgba(35, 139, 69, 0.20)",
-                        borderColor: "#6AD58B",
-                      },
-                    }}
-                  >
-                    WhatsApp
-                  </Button>
-                </Box>
-              </form>
 
               <Typography
                 sx={{
@@ -1118,7 +985,8 @@ function ContactUs() {
                   lineHeight: 1.7,
                 }}
               >
-                Your details are used to respond to your enquiry.
+                Your booking is saved before WhatsApp opens.
+                You must press Send in WhatsApp to deliver the message.
               </Typography>
             </Box>
           </motion.div>
@@ -1127,26 +995,3 @@ function ContactUs() {
     </Box>
   );
 }
-
-// Branch link styles, shared by all branch cards.
-const branchLinkSx = {
-  color: GOLD_LIGHT,
-  textTransform: "none",
-  fontSize: 13,
-  justifyContent: "flex-start",
-  px: 0,
-  minWidth: 0,
-  maxWidth: "100%",
-  lineHeight: 1.6,
-  overflowWrap: "anywhere",
-  "& .MuiButton-startIcon": {
-    color: GOLD,
-    mr: 1,
-  },
-  "&:hover": {
-    color: "#FFF2C9",
-    background: "rgba(232,197,110,0.055)",
-  },
-};
-
-export default ContactUs;

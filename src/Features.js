@@ -12,6 +12,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
+import BookNow from "./BookNow";
+import { useNavigate } from "react-router-dom";
 
 import { getAllApiData } from "./api";
 
@@ -165,7 +167,7 @@ export default function Features() {
 
   const slideCount = slides.length;
   const current = slides[index] || fallbackSlides[0];
-
+  const navigate = useNavigate();
   // ===================================================
   // FETCH GOOGLE APPS SCRIPT DATA
   // Uses getAllApiData() from ./api
@@ -677,38 +679,16 @@ export default function Features() {
               </Box>
 
               <Box sx={{ display: "flex", gap: 1, flexShrink: 0 }}>
-                <Button
-                  variant="contained"
-                  onClick={() =>
-                    window.open(
-                      `https://wa.me/?text=${encodeURIComponent(
-                        `Hello Golden Dreams, I am interested in ${current.title}.`
-                      )}`,
-                      "_blank",
-                      "noopener,noreferrer"
-                    )
-                  }
-                  sx={{
-                    bgcolor: current.accent[0],
-                    color: "#000",
-                    fontWeight: 800,
-                    px: 3,
-                    py: 1,
-                    borderRadius: 2,
-                    whiteSpace: "nowrap",
-                    "&:hover": { filter: "brightness(0.95)" },
-                  }}
-                >
-                  Book Now
-                </Button>
+                
+                <BookNow
+                    serviceTitle={current.title}
+                    accentColor={current.accent[0]}
+                    buttonText="Book Now" 
+                  />
 
                 <Button
                   variant="outlined"
-                  onClick={() =>
-                    document
-                      .getElementById("contact")
-                      ?.scrollIntoView({ behavior: "smooth" })
-                  }
+                  onClick={() => navigate("/learn-more")}
                   sx={{
                     color: "#fff",
                     borderColor: "rgba(255,255,255,0.12)",
