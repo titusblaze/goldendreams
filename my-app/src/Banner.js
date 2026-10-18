@@ -359,39 +359,33 @@ export default function Banner() {
                   }}
                 />
               </motion.div>
+              
             </Box>
 
             {/* ACTION BUTTONS */}
 
-            <Box
+            {/* <Box
               sx={{
                 position: "absolute",
-                right: { xs: 14, sm: 35, md: 60 },
-                bottom: { xs: 42, sm: 48, md: 54 },
-                left: { xs: 14, sm: "auto" },
-                zIndex: 3,
+                right: { xs: 12, sm: 35, md: 60 },
+                bottom: { xs: 48, sm: 48, md: 54 },
+                left: { xs: 12, sm: "auto" },
+                zIndex: 4,
                 display: "flex",
                 flexWrap: "wrap",
-                justifyContent: {
-                  xs: "center",
-                  sm: "flex-end",
-                },
+                justifyContent: { xs: "center", sm: "flex-end" },
                 alignItems: "center",
-                gap: { xs: 1.2, sm: 1.5 },
+                gap: { xs: 1.5, sm: 1.5 },
+                width: { xs: "auto", sm: "auto" },
               }}
             >
-              {/* SEPARATE BOOKING COMPONENT */}
-
               <BookNow />
-
-              {/* CALL NOW BUTTON */}
 
               <Button
                 onClick={callNow}
                 variant="contained"
                 sx={{
-                  background:
-                    "linear-gradient(90deg,#FFD700,#FF9800)",
+                  background: "linear-gradient(90deg,#FFD700,#FF9800)",
                   width: "max-content",
                   maxWidth: "100%",
                   flexShrink: 0,
@@ -403,18 +397,14 @@ export default function Banner() {
                   fontWeight: 700,
                   fontSize: { xs: "0.85rem", sm: "0.95rem" },
                   color: MIDNIGHT,
-                  transition: "all 0.25s ease",
                   "&:hover": {
-                    background:
-                      "linear-gradient(135deg, #D8B15A, #F5D990)",
-                    transform: "translateY(-2px)",
-                    boxShadow: "0 7px 24px rgba(216,177,90,0.3)",
+                    background: "linear-gradient(135deg, #D8B15A, #F5D990)",
                   },
                 }}
               >
                 Call Now
               </Button>
-            </Box>
+            </Box> */}
 
             {/* PREVIOUS ARROW */}
 
@@ -520,6 +510,52 @@ export default function Banner() {
         </motion.div>
       </AnimatePresence>
 
+      {/* FIXED ACTION BUTTONS - OUTSIDE SLIDE ANIMATION */}
+
+      <Box
+        sx={{
+          position: "absolute",
+          right: { xs: 14, sm: 35, md: 60 },
+          bottom: { xs: 42, sm: 48, md: 54 },
+          left: { xs: 14, sm: "auto" },
+          zIndex: 10,
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: { xs: "center", sm: "flex-end" },
+          alignItems: "center",
+          gap: { xs: 1.2, sm: 1.5 },
+        }}
+      >
+        <BookNow />
+
+        <Button
+          onClick={callNow}
+          variant="contained"
+          sx={{
+            background: "linear-gradient(90deg,#FFD700,#FF9800)",
+            width: "max-content",
+            maxWidth: "100%",
+            flexShrink: 0,
+            whiteSpace: "nowrap",
+            px: { xs: 2.3, sm: 3 },
+            py: 1.15,
+            borderRadius: "30px",
+            textTransform: "none",
+            fontWeight: 700,
+            fontSize: { xs: "0.85rem", sm: "0.95rem" },
+            color: MIDNIGHT,
+            "&:hover": {
+              background: "linear-gradient(135deg, #D8B15A, #F5D990)",
+              transform: "translateY(-2px)",
+              boxShadow: "0 7px 24px rgba(216,177,90,0.3)",
+            },
+          }}
+        >
+          Call Now
+        </Button>
+      </Box>
+
+      
       {/* API LOADING STATUS */}
 
       {loading && (
