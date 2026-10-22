@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
-import { HashRouter } from 'react-router-dom'; // ✅ Import BrowserRouter
+import { BrowserRouter } from 'react-router-dom'; // ✅ Import BrowserRouter
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const queryClient = new QueryClient(); // Create a new query client
@@ -11,9 +11,9 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <QueryClientProvider client={queryClient}>
   <React.StrictMode>
-    <HashRouter>         {/* ✅ Wrap App with BrowserRouter */}
+    <BrowserRouter>         {/* ✅ Wrap App with BrowserRouter */}
       <App />
-    </HashRouter>
+    </BrowserRouter>
   </React.StrictMode>
   </QueryClientProvider>
 );
