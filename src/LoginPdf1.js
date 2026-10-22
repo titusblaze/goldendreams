@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from "react";
 
 import {
@@ -16,11 +17,11 @@ import {
 } from "@mui/icons-material";
 
 // =====================================================
-// GOOGLE APPS SCRIPT API
+// SECURE CLOUDFLARE WORKER API
 // =====================================================
 
-const DATA_API =
-  "https://script.google.com/macros/s/AKfycbxNG3fuMW_DivRzBfhcPdwcJ3MTBgHOic1AhkWiMNhsXDq56a77Rg7UP4PpjeVQ116tbA/exec";
+const ALBUMS_API =
+  "https://golden-dreams-api-proxy.titus-blaze.workers.dev/albums";
 
 // =====================================================
 // EXTRACT GOOGLE DRIVE FILE ID
@@ -60,14 +61,20 @@ export default function LoginPdf1() {
   const [showScrollIndicator, setShowScrollIndicator] = useState(false);
 
   // =====================================================
-  // FETCH ALBUMS
+  // FETCH ALBUMS THROUGH AUTHENTICATED WORKER API
   // =====================================================
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchAlbums = async () => {
-      if (!username.trim()) {
-        setError("Please login again to view your albums.");
-        setLoading(false);
+      const token = localStorage.getItem("sessionToken");
+
+      if (!username.trim() || !token) {
+        if (!cancelled) {
+          setError("Please login again to view your albums.");
+          setLoading(false);
+        }
         return;
       }
 
@@ -75,39 +82,69 @@ export default function LoginPdf1() {
         setLoading(true);
         setError("");
 
-        const response = await fetch(DATA_API);
-
-        if (!response.ok) {
-          throw new Error("Unable to connect to the API.");
-        }
+        const response = await fetch(ALBUMS_API, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}),
+          cache: "no-store",
+        });
 
         const result = await response.json();
 
-        const albums = Array.isArray(result)
-          ? result.filter(
+        if (response.status === 401) {
+          localStorage.removeItem("sessionToken");
+          localStorage.removeItem("isLoggedIn");
+
+          if (!cancelled) {
+            setData([]);
+            setError("Your session expired. Please login again.");
+          }
+          return;
+        }
+
+        if (!response.ok || result.success !== true) {
+          throw new Error(result.error || "Unable to load albums.");
+        }
+
+        // The Worker verifies the signed token and selects the
+        // username on the server. Do not filter using client username.
+        const albums = Array.isArray(result.albums)
+          ? result.albums.filter(
               (item) =>
-                String(item.UserName ?? "").trim() ===
-                  username.trim() &&
                 String(item.heading1 ?? "").trim() &&
                 String(item.pdf1 ?? "").trim()
             )
           : [];
 
-        setData(albums);
-        setSelectedIndex(0);
+        if (!cancelled) {
+          setData(albums);
+          setSelectedIndex(0);
 
-        if (!albums.length) {
-          setError("No albums are available for this account.");
+          if (!albums.length) {
+            setError("No albums are available for this account.");
+          }
         }
       } catch (err) {
         console.error("Album API error:", err);
-        setError("Unable to load albums. Please try again.");
+
+        if (!cancelled) {
+          setError("Unable to load albums. Please try again.");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchAlbums();
+
+    return () => {
+      cancelled = true;
+    };
   }, [username]);
 
   // =====================================================
@@ -405,7 +442,7 @@ export default function LoginPdf1() {
           pointerEvents: "none",
         }}
       >
-        {/* LEFT PANEL: COMPACT BRAND AND TITLE */}
+        {/* LEFT PANEL: BRAND AND TITLE */}
 
         <Box
           sx={{

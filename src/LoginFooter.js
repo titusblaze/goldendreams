@@ -22,9 +22,9 @@ import GavelRoundedIcon from "@mui/icons-material/GavelRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import CallRoundedIcon from "@mui/icons-material/CallRounded";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
+import apiLogin from "./apiLogin";
 
-const API_URL =
-  "https://script.google.com/macros/s/AKfycbxNG3fuMW_DivRzBfhcPdwcJ3MTBgHOic1AhkWiMNhsXDq56a77Rg7UP4PpjeVQ116tbA/exec";
+const API_URL = apiLogin;
 
 const GOLD = "#D8B15A";
 const LIGHT_GOLD = "#F5D990";
@@ -198,11 +198,10 @@ export default function LoginFooter() {
           : [];
 
         const officeRecord = records.find(
-          (item) =>
-            String(item?.UserName ?? "")
-              .trim()
-              .toLowerCase() === "office"
-        );
+            (item) =>
+              String(item?.Phone ?? "").trim() !== "" &&
+              String(item?.WhatsApp ?? "").trim() !== ""
+          );
 
         if (!officeRecord) {
           throw new Error(
