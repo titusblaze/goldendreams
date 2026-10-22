@@ -53,30 +53,33 @@ export default function Login() {
 
     try {
       const response = await fetch(
-        "https://script.google.com/macros/s/AKfycbxNG3fuMW_DivRzBfhcPdwcJ3MTBgHOic1AhkWiMNhsXDq56a77Rg7UP4PpjeVQ116tbA/exec"
+        "https://golden-dreams-api-proxy.titus-blaze.workers.dev/login",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            username: username.trim(),
+            password: password,
+          }),
+        }
       );
+
+      const result = await response.json();
 
       if (!response.ok) {
-        throw new Error("Unable to connect to the login service.");
+        throw new Error(
+          result.error || "Unable to connect to the login service."
+        );
       }
 
-      const data = await response.json();
-
-      if (!Array.isArray(data)) {
-        throw new Error("Unexpected API response. Please try again.");
-      }
-
-      const user = data.find(
-        (item) =>
-          String(item.UserName ?? "").trim() === username.trim() &&
-          String(item.Password ?? "") === password
-      );
-
-      if (user) {
+      if (result.success === true && result.token) {
+        localStorage.setItem("sessionToken", result.token);
         localStorage.setItem("isLoggedIn", "true");
         localStorage.setItem("username", username.trim());
 
-        navigate("/dashboard");
+        navigate("/dashboard", { replace: true });
       } else {
         setError("Invalid username or password.");
       }
@@ -277,7 +280,7 @@ export default function Login() {
             },
           }}
         >
-          {/* Cute golden icon */}
+          {/* Golden icon */}
           <motion.div
             initial={{ opacity: 0, scale: 0.75, rotate: -10 }}
             animate={{ opacity: 1, scale: 1, rotate: 0 }}

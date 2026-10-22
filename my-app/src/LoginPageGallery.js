@@ -49,11 +49,22 @@ const POSSIBLE_USER_KEYS = [
 ];
 
 /* =========================================================
-   GET STORED USERNAME
+   VALIDATE LOCAL SESSION
 ========================================================= */
 
 const getStoredUsername = () => {
   try {
+    const isLoggedIn =
+      localStorage.getItem("isLoggedIn") === "true";
+
+    const sessionToken =
+      localStorage.getItem("sessionToken");
+
+    // Require the session values used by the login component.
+    if (!isLoggedIn || !sessionToken) {
+      return "";
+    }
+
     for (const key of POSSIBLE_USER_KEYS) {
       const value = localStorage.getItem(key)?.trim();
 
@@ -64,7 +75,7 @@ const getStoredUsername = () => {
 
     return "";
   } catch (error) {
-    console.error("Unable to read username:", error);
+    console.error("Unable to read session:", error);
     return "";
   }
 };
@@ -83,17 +94,19 @@ export default function LoginPageGallery() {
   const [imageLoading, setImageLoading] = useState(true);
   const [zoom, setZoom] = useState(1);
 
-  // Identifies the latest gallery request.
-  // Older requests cannot update the gallery after logout.
+  // Prevent stale requests from restoring gallery content.
   const requestIdRef = useRef(0);
 
+  // Prevent repeated session checks from creating duplicate requests.
+  const lastUsernameRef = useRef("");
+
   /* =======================================================
-     LOGOUT HANDLER
+     CLEAR GALLERY SESSION
   ======================================================= */
 
   const clearGallerySession = useCallback(() => {
-    // Invalidate any outstanding API request.
     requestIdRef.current += 1;
+    lastUsernameRef.current = "";
 
     setLoggedUser("");
     setAlbums([]);
@@ -101,46 +114,102 @@ export default function LoginPageGallery() {
     setSelectedIndex(null);
     setZoom(1);
     setImageLoading(true);
-    setError("You have been logged out. Please log in again.");
+    setError("Your session has ended. Please log in again.");
     setLoading(false);
   }, []);
 
   /* =======================================================
-     LISTEN FOR LOGOUT
+     CHECK SESSION
+  ======================================================= */
+
+  const checkSession = useCallback(() => {
+    const username = getStoredUsername();
+
+    if (!username) {
+      clearGallerySession();
+      return;
+    }
+
+    const normalizedUsername = username.toLowerCase();
+
+    if (lastUsernameRef.current !== normalizedUsername) {
+      lastUsernameRef.current = normalizedUsername;
+      setError("");
+      setLoggedUser(username);
+    }
+  }, [clearGallerySession]);
+
+  /* =======================================================
+     LISTEN FOR LOGOUT AND SESSION CHANGES
   ======================================================= */
 
   useEffect(() => {
+    const handleLogout = () => {
+      localStorage.removeItem("sessionToken");
+      localStorage.removeItem("isLoggedIn");
+      localStorage.removeItem("username");
+      localStorage.removeItem("goldenDreamsUserName");
+      localStorage.removeItem("UserName");
+      localStorage.removeItem("userName");
+
+      window.dispatchEvent(new Event("golden-dreams-logout"));
+      clearGallerySession();
+    };
+
+    const handleStorage = (event) => {
+      // Check session changes made in another browser tab.
+      if (
+        event.key === null ||
+        event.key === "sessionToken" ||
+        event.key === "isLoggedIn" ||
+        POSSIBLE_USER_KEYS.includes(event.key)
+      ) {
+        checkSession();
+      }
+    };
+
+    const handlePageShow = () => {
+      // Recheck when returning through browser Back/Forward.
+      checkSession();
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        checkSession();
+      }
+    };
+
     window.addEventListener(
       "golden-dreams-logout",
-      clearGallerySession
+      handleLogout
     );
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("pageshow", handlePageShow);
+
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibility
+    );
+
+    // Validate the session when the component mounts.
+    checkSession();
 
     return () => {
       window.removeEventListener(
         "golden-dreams-logout",
-        clearGallerySession
+        handleLogout
+      );
+
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("pageshow", handlePageShow);
+
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibility
       );
     };
-  }, [clearGallerySession]);
-
-  /* =======================================================
-     READ USER WHEN COMPONENT MOUNTS
-  ======================================================= */
-
-  useEffect(() => {
-    const username = getStoredUsername();
-
-    if (!username) {
-      setLoggedUser("");
-      setAlbums([]);
-      setError("No logged-in user was found. Please login again.");
-      setLoading(false);
-      return;
-    }
-
-    setError("");
-    setLoggedUser(username);
-  }, []);
+  }, [checkSession]);
 
   /* =======================================================
      LOAD GALLERY
@@ -150,21 +219,14 @@ export default function LoginPageGallery() {
     const username = getStoredUsername();
 
     if (!username) {
-      requestIdRef.current += 1;
-
-      setLoggedUser("");
-      setAlbums([]);
-      setSelectedAlbum(null);
-      setSelectedIndex(null);
-      setError("No logged-in user was found. Please login again.");
-      setLoading(false);
+      clearGallerySession();
       return;
     }
 
-    // Each request gets a unique ID.
+    const normalizedUsername = username.trim().toLowerCase();
     const requestId = ++requestIdRef.current;
 
-    const normalizedUsername = username.trim().toLowerCase();
+    lastUsernameRef.current = normalizedUsername;
 
     try {
       setLoading(true);
@@ -186,41 +248,35 @@ export default function LoginPageGallery() {
 
       const result = await response.json();
 
-      // Discard the response if a newer request or logout occurred.
+      // Ignore a response if a newer request or logout occurred.
       if (requestId !== requestIdRef.current) {
         return;
       }
 
-      // Ensure the same user is still present after the request.
+      // Validate the session again after the network request.
       const currentUsername = getStoredUsername();
 
       if (
         !currentUsername ||
-        currentUsername.trim().toLowerCase() !== normalizedUsername
+        currentUsername.trim().toLowerCase() !==
+          normalizedUsername
       ) {
-        setAlbums([]);
-        setSelectedAlbum(null);
-        setSelectedIndex(null);
-        setLoggedUser("");
-        setError("Your session has ended. Please log in again.");
+        clearGallerySession();
         return;
       }
-
-      console.log("Golden Dreams API:", result);
 
       if (result.success !== true) {
         throw new Error(
           result.error ||
-          "Gallery API returned an unsuccessful response."
+            "Gallery API returned an unsuccessful response."
         );
       }
 
       if (!Array.isArray(result.data)) {
-        throw new Error(
-          "Gallery API returned invalid data."
-        );
+        throw new Error("Gallery API returned invalid data.");
       }
 
+      // Keep only albums belonging to the logged-in username.
       const userAlbums = result.data.filter((album) => {
         const sheetUsername = String(album?.UserName || "")
           .trim()
@@ -229,13 +285,26 @@ export default function LoginPageGallery() {
         return sheetUsername === normalizedUsername;
       });
 
-      // Check again before updating component state.
+      // Final guard before updating the UI.
       if (requestId !== requestIdRef.current) {
         return;
       }
 
-      setLoggedUser(currentUsername);
+      const finalUsername = getStoredUsername();
+
+      if (
+        !finalUsername ||
+        finalUsername.trim().toLowerCase() !==
+          normalizedUsername
+      ) {
+        clearGallerySession();
+        return;
+      }
+
+      setLoggedUser(finalUsername);
       setAlbums(userAlbums);
+      setSelectedAlbum(null);
+      setSelectedIndex(null);
     } catch (err) {
       if (requestId !== requestIdRef.current) {
         return;
@@ -255,14 +324,14 @@ export default function LoginPageGallery() {
         setLoading(false);
       }
     }
-  }, []);
+  }, [clearGallerySession]);
 
   /* =======================================================
-     LOAD GALLERY AFTER USER IS FOUND
+     LOAD GALLERY AFTER LOGIN
   ======================================================= */
 
   useEffect(() => {
-    if (loggedUser) {
+    if (loggedUser && getStoredUsername()) {
       loadGallery();
     }
   }, [loggedUser, loadGallery]);
@@ -336,6 +405,11 @@ export default function LoginPageGallery() {
   ======================================================= */
 
   const nextImage = useCallback(() => {
+    if (!getStoredUsername()) {
+      clearGallerySession();
+      return;
+    }
+
     if (!selectedAlbum || selectedIndex === null) {
       return;
     }
@@ -354,13 +428,22 @@ export default function LoginPageGallery() {
     setSelectedIndex(
       (current) => ((current ?? 0) + 1) % images.length
     );
-  }, [selectedAlbum, selectedIndex]);
+  }, [
+    selectedAlbum,
+    selectedIndex,
+    clearGallerySession,
+  ]);
 
   /* =======================================================
      PREVIOUS IMAGE
   ======================================================= */
 
   const previousImage = useCallback(() => {
+    if (!getStoredUsername()) {
+      clearGallerySession();
+      return;
+    }
+
     if (!selectedAlbum || selectedIndex === null) {
       return;
     }
@@ -380,7 +463,11 @@ export default function LoginPageGallery() {
       (current) =>
         ((current ?? 0) - 1 + images.length) % images.length
     );
-  }, [selectedAlbum, selectedIndex]);
+  }, [
+    selectedAlbum,
+    selectedIndex,
+    clearGallerySession,
+  ]);
 
   /* =======================================================
      KEYBOARD NAVIGATION
@@ -389,6 +476,11 @@ export default function LoginPageGallery() {
   useEffect(() => {
     const keyboard = (event) => {
       if (selectedIndex === null) {
+        return;
+      }
+
+      if (!getStoredUsername()) {
+        clearGallerySession();
         return;
       }
 
@@ -418,7 +510,12 @@ export default function LoginPageGallery() {
     return () => {
       window.removeEventListener("keydown", keyboard);
     };
-  }, [selectedIndex, nextImage, previousImage]);
+  }, [
+    selectedIndex,
+    nextImage,
+    previousImage,
+    clearGallerySession,
+  ]);
 
   /* =======================================================
      LOCK BODY SCROLL WHEN VIEWER IS OPEN
@@ -516,8 +613,6 @@ export default function LoginPageGallery() {
   if (!selectedAlbum) {
     return (
       <Box className="gd-page">
-        {/* HERO */}
-
         <Box className="gd-hero">
           <Box className="gd-hero-orb orb-one" />
           <Box className="gd-hero-orb orb-two" />
@@ -549,8 +644,6 @@ export default function LoginPageGallery() {
           </Box>
         </Box>
 
-        {/* CONTENT */}
-
         <Box className="gd-content">
           <Box className="gd-section-header">
             <Box>
@@ -568,8 +661,6 @@ export default function LoginPageGallery() {
               {albums.length !== 1 ? "S" : ""}
             </Typography>
           </Box>
-
-          {/* NO ALBUMS */}
 
           {albums.length === 0 ? (
             <Box className="gd-no-albums">
@@ -589,8 +680,6 @@ export default function LoginPageGallery() {
               </Button>
             </Box>
           ) : (
-            /* ALBUM GRID */
-
             <Box className="gd-album-grid">
               {albums.map((album, index) => {
                 const cover = album?.images?.[0]?.secure_url;
@@ -667,8 +756,6 @@ export default function LoginPageGallery() {
 
   return (
     <Box className="gd-page">
-      {/* ALBUM TOOLBAR */}
-
       <Box className="gd-album-toolbar">
         <Tooltip title="Back to Albums">
           <IconButton
@@ -696,8 +783,6 @@ export default function LoginPageGallery() {
         </Box>
       </Box>
 
-      {/* PHOTO CONTENT */}
-
       <Box className="gd-photo-content">
         <Box className="gd-photo-heading">
           <Typography className="gd-photo-heading-title">
@@ -708,8 +793,6 @@ export default function LoginPageGallery() {
             Captured moments
           </Typography>
         </Box>
-
-        {/* PHOTO GRID */}
 
         <Box className="gd-masonry">
           {selectedAlbum?.images?.map((image, index) => (
@@ -736,8 +819,6 @@ export default function LoginPageGallery() {
             </Box>
           ))}
         </Box>
-
-        {/* NO PHOTOS */}
 
         {(!selectedAlbum?.images ||
           selectedAlbum.images.length === 0) && (
@@ -774,8 +855,6 @@ export default function LoginPageGallery() {
           className="gd-viewer"
           onClick={(event) => event.stopPropagation()}
         >
-          {/* VIEWER HEADER */}
-
           <Box className="gd-viewer-top">
             <Box>
               <Typography className="gd-viewer-brand">
@@ -801,8 +880,6 @@ export default function LoginPageGallery() {
               <Close />
             </IconButton>
           </Box>
-
-          {/* IMAGE STAGE */}
 
           <Box className="gd-viewer-stage">
             {selectedAlbum?.images?.length > 1 && (
@@ -853,8 +930,6 @@ export default function LoginPageGallery() {
               </IconButton>
             )}
           </Box>
-
-          {/* ZOOM CONTROLS */}
 
           <Box className="gd-viewer-controls">
             <IconButton

@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { Box, IconButton } from "@mui/material";
 import { ChevronLeft, ChevronRight } from "@mui/icons-material";
+import apiLogin from "./apiLogin";
 
-const DATA_API = "https://script.google.com/macros/s/AKfycbxNG3fuMW_DivRzBfhcPdwcJ3MTBgHOic1AhkWiMNhsXDq56a77Rg7UP4PpjeVQ116tbA/exec"; // GET API
-
+const DATA_API = await fetch(
+        apiLogin
+      );
 const LoginPage = () => {
   const [data, setData] = useState([]);
   const [currentSlide, setCurrentSlide] = useState(0);

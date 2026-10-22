@@ -1,7 +1,12 @@
 import "./App.css";
 
-import { useMemo } from "react";
-import { Routes, Route, useLocation } from "react-router-dom";
+import { useMemo, useEffect, useState } from "react";
+import {
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from "react-router-dom";
 import { Box, useMediaQuery } from "@mui/material";
 import { motion } from "framer-motion";
 
@@ -18,28 +23,79 @@ import DashboardNavbar from "./DashboardNavbar";
 import LoginComponent from "./LoginComponent";
 import LoginFooter from "./LoginFooter";
 import Footer from "./Footer";
-import LearnMore from "./LearnMore"; // Import the LearnMore component
+import LearnMore from "./LearnMore";
 
-// Keep your existing API function if you use it elsewhere.
-const fetchData = async () => {
-  const url =
-    "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLjCZKvcMAKMcSFu3uw6l-QsZfHa2AcL0EBb0Ee90fWujYGX0i0VyhKWlDGvjCoAoyRHCcn35BJ6PyLtFdVGaHfGrVURlCWBLHiPGw45nbQxLXeaKRRjNuASz3y1M-jCc3BR-7XvpGi0SDgDPgRplvJykVVxFlOgPEQNTYqO-PNSFPSQgl2ziR02b61S5JpHasW0jG8d8VCKYzdsyl5TLM0otFBx5zhOqQS0rt9Hk1dLl4wXZPXKnLCHlhMjnXuahSu_89UDsYDOB5r7HQxLv5Pb27O_zQ&lib=ME9LPB3JZtBZlz1PevbxUQfFnlO6455Uk";
+/* =========================================================
+   SESSION CHECK
+========================================================= */
 
-  const response = await fetch(url);
+function hasValidLocalSession() {
+  return (
+    localStorage.getItem("isLoggedIn") === "true" &&
+    Boolean(localStorage.getItem("sessionToken"))
+  );
+}
 
-  if (!response.ok) {
-    throw new Error("Failed to fetch data");
+/* =========================================================
+   PROTECTED DASHBOARD ROUTE
+========================================================= */
+
+function ProtectedRoute({ children }) {
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    hasValidLocalSession
+  );
+
+  useEffect(() => {
+    const checkSession = () => {
+      setIsAuthenticated(hasValidLocalSession());
+    };
+
+    // Check when the page is restored from browser history.
+    window.addEventListener("pageshow", checkSession);
+
+    // Check when localStorage changes in another tab.
+    window.addEventListener("storage", checkSession);
+
+    // Check when the app broadcasts a logout.
+    window.addEventListener(
+      "golden-dreams-logout",
+      checkSession
+    );
+
+    // Recheck when the user returns to the tab.
+    document.addEventListener(
+      "visibilitychange",
+      checkSession
+    );
+
+    checkSession();
+
+    return () => {
+      window.removeEventListener("pageshow", checkSession);
+      window.removeEventListener("storage", checkSession);
+      window.removeEventListener(
+        "golden-dreams-logout",
+        checkSession
+      );
+      document.removeEventListener(
+        "visibilitychange",
+        checkSession
+      );
+    };
+  }, []);
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
   }
 
-  return response.json();
-};
+  return children;
+}
 
 /* =========================================================
    MIDNIGHT GOLD BACKGROUND ANIMATION
 ========================================================= */
 
 function MidnightGoldAnimation() {
-  // Random positions are generated only once per component mount.
   const particles = useMemo(
     () =>
       Array.from({ length: 42 }, (_, i) => ({
@@ -126,12 +182,7 @@ function MidnightGoldAnimation() {
             scale: 0.4,
           }}
           animate={{
-            y: [
-              0,
-              -particle.drift,
-              -particle.drift * 0.4,
-              0,
-            ],
+            y: [0, -particle.drift, -particle.drift * 0.4, 0],
             x: [
               0,
               particle.drift * 0.25,
@@ -250,7 +301,6 @@ function App() {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const location = useLocation();
 
-  // Public navigation pages.
   const navbarPages = [
     "/",
     "/pricing",
@@ -309,7 +359,10 @@ function App() {
             }}
           >
             <ScrollToTop />
+
             <Routes>
+              {/* Public pages */}
+
               <Route path="/" element={<Home />} />
 
               <Route
@@ -332,24 +385,36 @@ function App() {
                 element={<Live />}
               />
 
-              <Route 
-              path="/learn-more" 
-              element={<LearnMore />} />
+              <Route
+                path="/learn-more"
+                element={<LearnMore />}
+              />
 
               <Route
                 path="/login"
                 element={<Login />}
               />
 
+              {/* Protected dashboard */}
+
               <Route
                 path="/dashboard"
                 element={
-                  <>
-                    <DashboardNavbar />
-                    <LoginComponent />
-                    <LoginFooter />
-                  </>
+                  <ProtectedRoute>
+                    <>
+                      <DashboardNavbar />
+                      <LoginComponent />
+                      <LoginFooter />
+                    </>
+                  </ProtectedRoute>
                 }
+              />
+
+              {/* Unknown URLs return to the home page */}
+
+              <Route
+                path="*"
+                element={<Navigate to="/" replace />}
               />
             </Routes>
           </Box>
