@@ -1,3 +1,4 @@
+
 import "./App.css";
 
 import { useMemo, useEffect, useState } from "react";
@@ -42,27 +43,78 @@ function hasValidLocalSession() {
 
 function ProtectedRoute({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(
-    hasValidLocalSession
+    () => hasValidLocalSession()
   );
 
   useEffect(() => {
+    const dashboardUrl = window.location.href;
+
     const checkSession = () => {
-      setIsAuthenticated(hasValidLocalSession());
+      const validSession = hasValidLocalSession();
+      setIsAuthenticated(validSession);
     };
 
-    // Check when the page is restored from browser history.
+    /*
+      Add a protected history entry.
+
+      This makes the mobile browser Back button
+      stay on the dashboard while the session is valid.
+    */
+
+    if (
+      !window.history.state?.protectedDashboard
+    ) {
+      window.history.pushState(
+        {
+          ...(window.history.state || {}),
+          protectedDashboard: true,
+        },
+        "",
+        dashboardUrl
+      );
+    }
+
+    /*
+      Handle browser Back navigation.
+
+      Capture phase is used so this handler runs
+      before React Router processes the popstate event.
+    */
+
+    const handlePopState = () => {
+      if (hasValidLocalSession()) {
+        window.history.pushState(
+          {
+            ...(window.history.state || {}),
+            protectedDashboard: true,
+          },
+          "",
+          dashboardUrl
+        );
+      } else {
+        setIsAuthenticated(false);
+      }
+    };
+
+    window.addEventListener(
+      "popstate",
+      handlePopState,
+      true
+    );
+
+    // Check when restored from browser history / cache
     window.addEventListener("pageshow", checkSession);
 
-    // Check when localStorage changes in another tab.
+    // Check when storage changes in another tab
     window.addEventListener("storage", checkSession);
 
-    // Check when the app broadcasts a logout.
+    // Check when logout is triggered
     window.addEventListener(
       "golden-dreams-logout",
       checkSession
     );
 
-    // Recheck when the user returns to the tab.
+    // Check when returning to the browser tab
     document.addEventListener(
       "visibilitychange",
       checkSession
@@ -71,12 +123,27 @@ function ProtectedRoute({ children }) {
     checkSession();
 
     return () => {
-      window.removeEventListener("pageshow", checkSession);
-      window.removeEventListener("storage", checkSession);
+      window.removeEventListener(
+        "popstate",
+        handlePopState,
+        true
+      );
+
+      window.removeEventListener(
+        "pageshow",
+        checkSession
+      );
+
+      window.removeEventListener(
+        "storage",
+        checkSession
+      );
+
       window.removeEventListener(
         "golden-dreams-logout",
         checkSession
       );
+
       document.removeEventListener(
         "visibilitychange",
         checkSession
@@ -182,7 +249,12 @@ function MidnightGoldAnimation() {
             scale: 0.4,
           }}
           animate={{
-            y: [0, -particle.drift, -particle.drift * 0.4, 0],
+            y: [
+              0,
+              -particle.drift,
+              -particle.drift * 0.4,
+              0,
+            ],
             x: [
               0,
               particle.drift * 0.25,

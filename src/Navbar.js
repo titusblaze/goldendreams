@@ -84,12 +84,23 @@ const Navbar = () => {
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
             sx={{
-              zIndex: 1,
-              padding: "0.6rem 1.6rem",
-              fontSize: "1rem",
-              color: activeBtn === label ? "#FFD700" : "#fff",
-              fontWeight: activeBtn === label ? "bold" : "normal",
-            }}
+                zIndex: 1,
+                padding: "0.6rem 1.6rem",
+                fontSize: "1rem",
+                color: activeBtn === label ? "#FFD700" : "#fff",
+                fontWeight: activeBtn === label ? "bold" : "normal",
+                backgroundColor: "transparent",
+                "&:hover": {
+                  backgroundColor: "transparent",
+                  color: "#FFD700",
+                },
+                "&:focus": {
+                  backgroundColor: "transparent",
+                },
+                "&:active": {
+                  backgroundColor: "transparent",
+                },
+              }}
           >
             {label}
           </Button>

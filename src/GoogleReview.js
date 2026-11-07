@@ -406,6 +406,7 @@ export default function GoogleReview() {
 
   return (
     <Box
+    id="reviews"
       sx={{
         width: "100%",
         py: { xs: 5, sm: 6, md: 8 },

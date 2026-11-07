@@ -28,7 +28,7 @@ const pageContent = {
   vision:
     "Our vision is to become a trusted creative partner for families and individuals by preserving meaningful memories through thoughtful photography, beautiful films and carefully designed albums.",
   mission:
-    "Our mission is to capture genuine emotions, create lasting visual stories and deliver creative work with care, imagination and attention to detail.",
+    "Our mission is to capture heartfelt moments and transform them into timeless memories through creative photography, beautiful films, and thoughtfully crafted albums. Every detail is delivered with passion, care, and creativity.",
   photography:
     "Every photograph holds a moment that can never be repeated. We aim to capture natural expressions, meaningful details and authentic emotions so that every image becomes a treasured memory.",
   films:

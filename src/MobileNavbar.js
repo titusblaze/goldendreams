@@ -43,7 +43,7 @@ const GLASS = "rgba(12, 14, 19, 0.92)";
 
 const radius = 130;
 const iconSize = 62;
-const visibleCount = 3;
+const visibleCount = 4;
 
 const buttonStyle = {
   width: 62,
@@ -132,8 +132,7 @@ const makeIcons = (navigate) => [
     icon: <StarsRoundedIcon />,
     label: "Review",
     action: () => {
-      window.location.href =
-        "https://g.page/r/YOUR-GOOGLE-REVIEW-LINK/review";
+       window.location.href = "/#reviews";
     },
   },
 ];
