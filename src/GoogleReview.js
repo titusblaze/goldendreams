@@ -83,6 +83,137 @@ export default function GoogleReview() {
   const [activeIndex, setActiveIndex] = useState(0);
 
   /* =======================================================
+     DESKTOP MOUSE DRAG + SMOOTH MOMENTUM
+     Mobile touch scrolling remains unchanged.
+  ======================================================= */
+
+  const isMouseDraggingRef = useRef(false);
+  const mouseStartXRef = useRef(0);
+  const mouseScrollLeftRef = useRef(0);
+  const lastMouseXRef = useRef(0);
+  const lastMoveTimeRef = useRef(0);
+  const velocityRef = useRef(0);
+  const momentumFrameRef = useRef(null);
+
+  const handleMouseMove = (event) => {
+    if (!isMouseDraggingRef.current) return;
+
+    const slider = reviewSliderRef.current;
+    if (!slider) return;
+
+    event.preventDefault();
+
+    const now = performance.now();
+    const distance = event.clientX - mouseStartXRef.current;
+
+    slider.scrollLeft = mouseScrollLeftRef.current - distance;
+
+    const elapsed = Math.max(
+      now - lastMoveTimeRef.current,
+      1
+    );
+
+    const movement = lastMouseXRef.current - event.clientX;
+
+    velocityRef.current = (movement / elapsed) * 16;
+
+    lastMouseXRef.current = event.clientX;
+    lastMoveTimeRef.current = now;
+  };
+
+  const handleMouseUp = () => {
+    if (!isMouseDraggingRef.current) return;
+
+    const slider = reviewSliderRef.current;
+
+    isMouseDraggingRef.current = false;
+
+    window.removeEventListener("mousemove", handleMouseMove);
+    window.removeEventListener("mouseup", handleMouseUp);
+
+    if (slider) {
+      slider.style.cursor = "grab";
+      slider.style.userSelect = "";
+    }
+
+    // Smooth momentum after releasing the mouse.
+    const animateMomentum = () => {
+      const currentSlider = reviewSliderRef.current;
+
+      if (!currentSlider) {
+        momentumFrameRef.current = null;
+        return;
+      }
+
+      currentSlider.scrollLeft += velocityRef.current;
+
+      // Gradually reduce movement speed.
+      velocityRef.current *= 0.94;
+
+      if (Math.abs(velocityRef.current) > 0.3) {
+        momentumFrameRef.current =
+          requestAnimationFrame(animateMomentum);
+      } else {
+        momentumFrameRef.current = null;
+        velocityRef.current = 0;
+      }
+    };
+
+    if (momentumFrameRef.current !== null) {
+      cancelAnimationFrame(momentumFrameRef.current);
+      momentumFrameRef.current = null;
+    }
+
+    if (Math.abs(velocityRef.current) > 0.3) {
+      momentumFrameRef.current =
+        requestAnimationFrame(animateMomentum);
+    }
+  };
+
+  const handleMouseDown = (event) => {
+    // Only left mouse button.
+    if (event.button !== 0) return;
+
+    const slider = reviewSliderRef.current;
+    if (!slider) return;
+
+    // Stop previous momentum when a new drag starts.
+    if (momentumFrameRef.current !== null) {
+      cancelAnimationFrame(momentumFrameRef.current);
+      momentumFrameRef.current = null;
+    }
+
+    isMouseDraggingRef.current = true;
+
+    mouseStartXRef.current = event.clientX;
+    mouseScrollLeftRef.current = slider.scrollLeft;
+
+    lastMouseXRef.current = event.clientX;
+    lastMoveTimeRef.current = performance.now();
+
+    velocityRef.current = 0;
+
+    slider.style.cursor = "grabbing";
+    slider.style.userSelect = "none";
+
+    // Continue tracking even outside the carousel.
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  };
+
+  // Cleanup mouse listeners and animation on unmount.
+  useEffect(() => {
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+
+      if (momentumFrameRef.current !== null) {
+        cancelAnimationFrame(momentumFrameRef.current);
+      }
+    };
+  }, []);
+
+  /* =======================================================
      FETCH REVIEWS
   ======================================================= */
 
@@ -326,7 +457,7 @@ export default function GoogleReview() {
 
   /* =======================================================
      UPDATE ACTIVE CARD ONLY
-     IMPORTANT: This does not move or recenter the carousel.
+     This does not move or recenter the carousel.
   ======================================================= */
 
   useEffect(() => {
@@ -406,7 +537,7 @@ export default function GoogleReview() {
 
   return (
     <Box
-    id="reviews"
+      id="reviews"
       sx={{
         width: "100%",
         py: { xs: 5, sm: 6, md: 8 },
@@ -481,6 +612,8 @@ export default function GoogleReview() {
         <Box sx={{ width: "100%", overflow: "hidden" }}>
           <Box
             ref={reviewSliderRef}
+            onMouseDown={handleMouseDown}
+            onDragStart={(event) => event.preventDefault()}
             sx={{
               display: "flex",
               alignItems: "center",

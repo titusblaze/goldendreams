@@ -11,7 +11,7 @@ import {
   ClickAwayListener,
   Divider,
 } from "@mui/material";
-
+import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
 import MenuIcon from "@mui/icons-material/Menu";
 import CloseIcon from "@mui/icons-material/Close";
 import WidgetsIcon from "@mui/icons-material/Widgets";
@@ -335,6 +335,7 @@ export default function MobileNavbar() {
     { label: "Home", path: "/", icon: <HomeRoundedIcon /> },
     { label: "Pricing", path: "/pricing", icon: <InfoRoundedIcon /> },
     { label: "Features", path: "/features", icon: <StarRoundedIcon /> },
+    { label: "Store", path: "/store", icon: <StorefrontRoundedIcon /> },
     { label: "Contact", path: "/contact", icon: <ContactMailRoundedIcon /> },
     { label: "Live", path: "/live", icon: <AutoAwesomeRoundedIcon /> },
     { label: "Login", path: "/login", icon: <AccountCircleRoundedIcon /> },

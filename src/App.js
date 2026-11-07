@@ -25,6 +25,7 @@ import LoginComponent from "./LoginComponent";
 import LoginFooter from "./LoginFooter";
 import Footer from "./Footer";
 import LearnMore from "./LearnMore";
+import Store from "./Store/Store";
 
 /* =========================================================
    SESSION CHECK
@@ -378,6 +379,7 @@ function App() {
     "/pricing",
     "/features",
     "/contact",
+    "/store",
     "/live",
     "/login",
   ];
@@ -445,6 +447,11 @@ function App() {
               <Route
                 path="/features"
                 element={<Features />}
+              />
+
+              <Route
+                path="/store"
+                element={<Store />}
               />
 
               <Route
