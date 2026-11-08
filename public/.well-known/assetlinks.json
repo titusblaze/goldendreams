@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.goldendreamsfsv.www.twa",
+      "sha256_cert_fingerprints": [
+        "51:5D:43:7B:24:E8:9B:E8:F6:F4:6F:D3:5F:62:BC:3F:B7:27:9A:20:E0:41:06:9D:84:66:33:DC:37:10:90:0A"
+      ]
+    }
+  }
+]
