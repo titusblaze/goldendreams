@@ -10,7 +10,7 @@ import {
 } from "react-router-dom";
 import { Box, useMediaQuery } from "@mui/material";
 import { motion } from "framer-motion";
-
+import SplashScreen from "./SplashScreen";
 import Navbar from "./Navbar";
 import MobileNavbar from "./MobileNavbar";
 import Home from "./Home";
@@ -373,7 +373,14 @@ function MidnightGoldAnimation() {
 function App() {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const location = useLocation();
+  const [showSplash, setShowSplash] = useState(true);
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        setShowSplash(false);
+      }, 2500);
 
+  return () => clearTimeout(timer);
+}, []);
   const navbarPages = [
     "/",
     "/pricing",
@@ -388,6 +395,7 @@ function App() {
 
   return (
     <div className="App">
+      {showSplash && <SplashScreen />}
       <Box
         sx={{
           position: "relative",
