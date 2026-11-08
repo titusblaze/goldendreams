@@ -83,8 +83,8 @@ export default function GoogleReview() {
   const [activeIndex, setActiveIndex] = useState(0);
 
   /* =======================================================
-     DESKTOP MOUSE DRAG + SMOOTH MOMENTUM
-     Mobile touch scrolling remains unchanged.
+     SMOOTH DESKTOP MOUSE DRAG + MOMENTUM
+     Mobile touch scrolling remains native.
   ======================================================= */
 
   const isMouseDraggingRef = useRef(false);
@@ -94,8 +94,9 @@ export default function GoogleReview() {
   const lastMoveTimeRef = useRef(0);
   const velocityRef = useRef(0);
   const momentumFrameRef = useRef(null);
+  const hasDraggedRef = useRef(false);
 
-  const handleMouseMove = (event) => {
+  const handleMouseMove = useCallback((event) => {
     if (!isMouseDraggingRef.current) return;
 
     const slider = reviewSliderRef.current;
@@ -103,29 +104,27 @@ export default function GoogleReview() {
 
     event.preventDefault();
 
+    const deltaX = event.clientX - mouseStartXRef.current;
+    if (Math.abs(deltaX) > 5) hasDraggedRef.current = true;
+
+    // Direct pointer tracking keeps the card movement responsive.
+    slider.scrollLeft = mouseScrollLeftRef.current - deltaX;
+
     const now = performance.now();
-    const distance = event.clientX - mouseStartXRef.current;
-
-    slider.scrollLeft = mouseScrollLeftRef.current - distance;
-
-    const elapsed = Math.max(
-      now - lastMoveTimeRef.current,
-      1
-    );
-
+    const elapsed = Math.max(now - lastMoveTimeRef.current, 1);
     const movement = lastMouseXRef.current - event.clientX;
+    const instantVelocity = (movement / elapsed) * 16;
 
-    velocityRef.current = (movement / elapsed) * 16;
-
+    // Smooth velocity sampling avoids sudden jumps from tiny mouse events.
+    velocityRef.current = velocityRef.current * 0.35 + instantVelocity * 0.65;
     lastMouseXRef.current = event.clientX;
     lastMoveTimeRef.current = now;
-  };
+  }, []);
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     if (!isMouseDraggingRef.current) return;
 
     const slider = reviewSliderRef.current;
-
     isMouseDraggingRef.current = false;
 
     window.removeEventListener("mousemove", handleMouseMove);
@@ -136,82 +135,97 @@ export default function GoogleReview() {
       slider.style.userSelect = "";
     }
 
-    // Smooth momentum after releasing the mouse.
+    if (momentumFrameRef.current !== null) {
+      cancelAnimationFrame(momentumFrameRef.current);
+      momentumFrameRef.current = null;
+    }
+
     const animateMomentum = () => {
       const currentSlider = reviewSliderRef.current;
-
       if (!currentSlider) {
         momentumFrameRef.current = null;
         return;
       }
 
       currentSlider.scrollLeft += velocityRef.current;
-
-      // Gradually reduce movement speed.
       velocityRef.current *= 0.94;
 
-      if (Math.abs(velocityRef.current) > 0.3) {
-        momentumFrameRef.current =
-          requestAnimationFrame(animateMomentum);
+      if (Math.abs(velocityRef.current) > 0.25) {
+        momentumFrameRef.current = requestAnimationFrame(animateMomentum);
       } else {
         momentumFrameRef.current = null;
         velocityRef.current = 0;
+        currentSlider.style.scrollSnapType = "x proximity";
       }
     };
 
-    if (momentumFrameRef.current !== null) {
-      cancelAnimationFrame(momentumFrameRef.current);
-      momentumFrameRef.current = null;
+    if (Math.abs(velocityRef.current) > 0.25) {
+      momentumFrameRef.current = requestAnimationFrame(animateMomentum);
+    } else if (slider) {
+      slider.style.scrollSnapType = "x proximity";
     }
+  }, [handleMouseMove]);
 
-    if (Math.abs(velocityRef.current) > 0.3) {
-      momentumFrameRef.current =
-        requestAnimationFrame(animateMomentum);
-    }
-  };
-
-  const handleMouseDown = (event) => {
-    // Only left mouse button.
+  const handleMouseDown = useCallback((event) => {
     if (event.button !== 0) return;
 
     const slider = reviewSliderRef.current;
     if (!slider) return;
 
-    // Stop previous momentum when a new drag starts.
     if (momentumFrameRef.current !== null) {
       cancelAnimationFrame(momentumFrameRef.current);
       momentumFrameRef.current = null;
     }
 
     isMouseDraggingRef.current = true;
-
+    hasDraggedRef.current = false;
     mouseStartXRef.current = event.clientX;
     mouseScrollLeftRef.current = slider.scrollLeft;
-
     lastMouseXRef.current = event.clientX;
     lastMoveTimeRef.current = performance.now();
-
     velocityRef.current = 0;
 
+    // Temporarily disable snap so it cannot fight the mouse while dragging.
+    slider.style.scrollSnapType = "none";
     slider.style.cursor = "grabbing";
     slider.style.userSelect = "none";
 
-    // Continue tracking even outside the carousel.
-    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mousemove", handleMouseMove, { passive: false });
     window.addEventListener("mouseup", handleMouseUp);
-  };
+  }, [handleMouseMove, handleMouseUp]);
 
-  // Cleanup mouse listeners and animation on unmount.
+  const handleReviewCardClick = useCallback((event) => {
+    // A drag should never be interpreted as a card click.
+    if (hasDraggedRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      hasDraggedRef.current = false;
+      return;
+    }
+
+    const slider = reviewSliderRef.current;
+    const card = event.currentTarget;
+    if (!slider || !card) return;
+
+    const sliderRect = slider.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    const targetScrollLeft = slider.scrollLeft +
+      (cardRect.left + cardRect.width / 2) -
+      (sliderRect.left + sliderRect.width / 2);
+
+    slider.scrollTo({ left: targetScrollLeft, behavior: "smooth" });
+  }, []);
+
+  // Remove listeners and stop any pending animation when the component unmounts.
   useEffect(() => {
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
-
       if (momentumFrameRef.current !== null) {
         cancelAnimationFrame(momentumFrameRef.current);
       }
     };
-  }, []);
+  }, [handleMouseMove, handleMouseUp]);
 
   /* =======================================================
      FETCH REVIEWS
@@ -384,7 +398,7 @@ export default function GoogleReview() {
 
   const handleSubmitReview = async () => {
     setSubmitError("");
-    setSubmitMessage("");
+        setSubmitMessage("");
 
     if (!googleUser) {
       setSubmitError("Please sign in with Google first.");
@@ -631,6 +645,7 @@ export default function GoogleReview() {
 
               scrollBehavior: "auto",
               scrollSnapType: "x proximity",
+              scrollPaddingInline: "0px",
 
               px: {
                 xs: "10%",
@@ -665,6 +680,7 @@ export default function GoogleReview() {
                     `${review.Name || "customer"}-${index}`
                   }
                   data-review-card
+                  onClick={handleReviewCardClick}
                   sx={{
                     width: cardWidth,
                     minWidth: cardWidth,
@@ -782,7 +798,7 @@ export default function GoogleReview() {
                   <Typography
                     sx={{
                       color: "rgba(255,255,255,0.90)",
-                      fontSize: { xs: "0.9rem", sm: "0.95rem" },
+                                            fontSize: { xs: "0.9rem", sm: "0.95rem" },
                       lineHeight: 1.7,
                       whiteSpace: "normal",
                       overflowWrap: "anywhere",

@@ -7,25 +7,28 @@ import {
   STORE_PACKAGES,
   formatPrice,
   fetchStoreData,
+  STORE_API_URL,
 } from "./StoreData";
 
 import { useStoreCart } from "./StoreCart";
 import { generateStoreQuotation } from "./StoreQuotation";
 
-
 const Store = () => {
   const [activeCategory, setActiveCategory] = useState("gifts");
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+
   const [storeCategories, setStoreCategories] =
-  useState(STORE_CATEGORIES);
+    useState(STORE_CATEGORIES);
 
-const [storeProducts, setStoreProducts] =
-  useState(STORE_PRODUCTS);
+  const [storeProducts, setStoreProducts] =
+    useState(STORE_PRODUCTS);
 
-const [storePackages, setStorePackages] =
-  useState(STORE_PACKAGES);
+  const [storePackages, setStorePackages] =
+    useState(STORE_PACKAGES);
 
-const [isStoreLoading, setIsStoreLoading] = useState(true);
+  const [isStoreLoading, setIsStoreLoading] = useState(true);
 
   const [customer, setCustomer] = useState({
     name: "",
@@ -48,52 +51,49 @@ const [isStoreLoading, setIsStoreLoading] = useState(true);
   } = useStoreCart();
 
   // Load Store data from Google Sheets with local fallback
-useEffect(() => {
-  let isMounted = true;
+  useEffect(() => {
+    let isMounted = true;
 
-  const loadStoreData = async () => {
-    try {
-      const data = await fetchStoreData();
+    const loadStoreData = async () => {
+      try {
+        const data = await fetchStoreData();
 
-      // Validate API response structure, not array lengths.
-      if (
-        !Array.isArray(data.categories) ||
-        !Array.isArray(data.products) ||
-        !Array.isArray(data.packages)
-      ) {
-        throw new Error("Invalid store data structure.");
-      }
+        if (
+          !Array.isArray(data.categories) ||
+          !Array.isArray(data.products) ||
+          !Array.isArray(data.packages)
+        ) {
+          throw new Error("Invalid store data structure.");
+        }
 
-      if (isMounted) {
-        setStoreCategories(data.categories);
-        setStoreProducts(data.products);
-        setStorePackages(data.packages);
+        if (isMounted) {
+          setStoreCategories(data.categories);
+          setStoreProducts(data.products);
+          setStorePackages(data.packages);
 
-        const firstCategory = data.categories.find(
-          (category) => category.id !== "customize"
-        );
+          const firstCategory = data.categories.find(
+            (category) => category.id !== "customize"
+          );
 
-        if (firstCategory) {
-          setActiveCategory(firstCategory.id);
+          if (firstCategory) {
+            setActiveCategory(firstCategory.id);
+          }
+        }
+      } catch (error) {
+        console.error("Store API Error:", error);
+      } finally {
+        if (isMounted) {
+          setIsStoreLoading(false);
         }
       }
-    } catch (error) {
-      console.error("Store API Error:", error);
+    };
 
-      // Local StoreData.js values remain as fallback.
-    } finally {
-      if (isMounted) {
-        setIsStoreLoading(false);
-      }
-    }
-  };
+    loadStoreData();
 
-  loadStoreData();
-
-  return () => {
-    isMounted = false;
-  };
-}, []);
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Scroll reveal animation
   useEffect(() => {
@@ -161,7 +161,7 @@ useEffect(() => {
     });
   };
 
-  const extraProducts = STORE_PRODUCTS.filter(
+  const extraProducts = storeProducts.filter(
     (product) => (selectedExtras[product.id] || 0) > 0
   );
 
@@ -183,7 +183,7 @@ useEffect(() => {
 
     const includedDetails = selectedPackage.includes
       .map((item) => {
-        const product = STORE_PRODUCTS.find(
+        const product = storeProducts.find(
           (product) => product.id === item.productId
         );
 
@@ -203,6 +203,8 @@ useEffect(() => {
       name: `${selectedPackage.name} - Customized`,
       price: customizedTotal,
       category: "combo-packages",
+      type: "Package",
+      isPackage: true,
       description: [
         `Base package: ${selectedPackage.name}`,
         `Included: ${includedDetails.join(", ")}`,
@@ -229,9 +231,11 @@ useEffect(() => {
     }));
   };
 
-  // Checkout and quotation
-  const handleCheckout = (event) => {
+  // Checkout: generate quotation, save order to Google Sheets, then open WhatsApp
+  const handleCheckout = async (event) => {
     event.preventDefault();
+
+    if (isSubmitting) return;
 
     if (cartItems.length === 0) {
       alert("Your cart is empty.");
@@ -249,27 +253,96 @@ useEffect(() => {
       return;
     }
 
-    const quotationNumber = generateStoreQuotation({
-      customer,
-      cartItems,
-      cartTotal,
-    });
+    // Open WhatsApp tab immediately to avoid popup blocking
+    const whatsappWindow = window.open("about:blank", "_blank");
 
-    const productDetails = cartItems
-      .map(
-        (item) =>
-          `${item.name} x ${item.quantity} = ${formatPrice(
+    setIsSubmitting(true);
+
+    try {
+      // Generate PDF quotation
+      const quotationNumber = await generateStoreQuotation({
+        customer,
+        cartItems,
+        cartTotal,
+      });
+
+      if (!quotationNumber) {
+        throw new Error(
+          "Quotation could not be generated. Please try again."
+        );
+      }
+
+      // Prepare order data for Google Sheets
+      const orderPayload = {
+        quotationNumber,
+
+        customer: {
+          name: customer.name.trim(),
+          phone: customer.phone.trim(),
+          email: customer.email || "",
+          address: customer.address.trim(),
+          eventDate: customer.eventDate || "",
+        },
+
+        cartItems: cartItems.map((item) => ({
+          id: item.id,
+          name: item.name,
+          price: Number(item.price) || 0,
+          quantity: Number(item.quantity) || 1,
+          description: item.description || "",
+          customizedDetails: item.description || "",
+          type: item.type || (item.isPackage ? "Package" : "Product"),
+          isPackage: Boolean(item.isPackage),
+        })),
+
+        cartTotal: Number(cartTotal) || 0,
+        deliveryCharges: 0,
+      };
+
+      // Save order to Google Sheets
+      const response = await fetch(STORE_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8",
+        },
+        body: JSON.stringify(orderPayload),
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          "Unable to connect to the order sheet. Please try again."
+        );
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(
+          result.message ||
+            "Google Sheets could not save this order."
+        );
+      }
+
+      // Prepare WhatsApp message after successful save
+      // Includes extras and customization details
+      const productDetails = cartItems
+        .map((item) => {
+          const details =
+            item.customizedDetails || item.description || "";
+
+          return `${item.name} x ${item.quantity} = ${formatPrice(
             item.price * item.quantity
-          )}`
-      )
-      .join("\n");
+          )}${details ? `\n   Extras / Customization: ${details}` : ""}`;
+        })
+        .join("\n\n");
 
-    const message = `
+      const message = `
 Hello Golden Dreams!
 
 I would like to enquire about the following products.
 
 Quotation: ${quotationNumber}
+Order ID: ${result.order?.orderId || "Saved"}
 
 Customer Name: ${customer.name}
 Contact: ${customer.phone}
@@ -281,103 +354,118 @@ ${productDetails}
 
 Total Amount: ${formatPrice(cartTotal)}
 
-
-Hello! 😊
-
-I've generated your quotation PDF. Please find it attached.
+I've generated my quotation PDF. Please find it attached.
 
 Kindly review it and let me know the next steps.
 
-Thank you for choosing **Golden Dreams!** ✨
+Thank you for choosing Golden Dreams!
+      `.trim();
 
-
-Thank you!
-    `.trim();
       const whatsappNumber = "919976149065";
 
-        const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
+      const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
         message
-        )}`;
-    
+      )}`;
 
-    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+      if (whatsappWindow && !whatsappWindow.closed) {
+        whatsappWindow.location.href = whatsappUrl;
+      } else {
+        window.location.href = whatsappUrl;
+      }
+
+      // Show premium success popup
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error("Store checkout error:", error);
+
+      if (whatsappWindow && !whatsappWindow.closed) {
+        whatsappWindow.close();
+      }
+
+      alert(
+        error.message ||
+          "Something went wrong while saving your order. Please try again."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Product card
-    // Product card with live cart indication
-    const renderProductCard = (product) => {
+  // Product card with live cart indication
+  const renderProductCard = (product) => {
     const cartItem = cartItems.find(
-        (item) => item.id === product.id
+      (item) => item.id === product.id
     );
 
     const quantity = cartItem ? cartItem.quantity : 0;
 
     return (
-        <article
+      <article
         className="store-product-card store-reveal"
         key={product.id}
-        >
+      >
         <div className="store-product-image">
-            {product.image ? (
+          {product.image ? (
             <img src={product.image} alt={product.name} />
-            ) : (
+          ) : (
             <span className="store-image-placeholder">✦</span>
-            )}
+          )}
         </div>
 
         <div className="store-product-info">
-            <h3 className="store-product-name">{product.name}</h3>
+          <h3 className="store-product-name">{product.name}</h3>
 
-            <p className="store-product-description">
+          <p className="store-product-description">
             {product.description}
-            </p>
+          </p>
 
-            <div className="store-product-bottom">
+          <div className="store-product-bottom">
             <span className="store-product-price">
-                {formatPrice(product.price)}
+              {formatPrice(product.price)}
             </span>
 
             {quantity === 0 ? (
-                <button
+              <button
                 type="button"
                 className="store-add-button"
                 onClick={() => addToCart(product)}
-                >
+              >
                 + Add to Cart
-                </button>
+              </button>
             ) : (
-                <div className="store-product-cart-status">
+              <div className="store-product-cart-status">
                 <span className="store-added-label">
-                    <span>✓</span> Added
+                  <span>✓</span> Added
                 </span>
 
                 <div className="store-product-quantity">
-                    <button
+                  <button
                     type="button"
                     onClick={() => decreaseQuantity(product.id)}
                     aria-label={`Decrease ${product.name}`}
-                    >
+                  >
                     −
-                    </button>
+                  </button>
 
-                    <span>{quantity}</span>
+                  <span>{quantity}</span>
 
-                    <button
+                  <button
                     type="button"
                     onClick={() => increaseQuantity(product.id)}
                     aria-label={`Increase ${product.name}`}
-                    >
+                  >
                     +
-                    </button>
+                  </button>
                 </div>
-                </div>
+              </div>
             )}
-            </div>
+          </div>
         </div>
-        </article>
+      </article>
     );
-    };
-    return (
+  };
+
+  return (
     <main className="store-page" ref={storeRef}>
       <div className="store-container">
 
@@ -435,35 +523,35 @@ Thank you!
 
         {/* PRODUCT CATEGORY SECTIONS */}
         {storeCategories
-        .filter((category) => category.id !== "customize")
-        .map((category) => {
+          .filter((category) => category.id !== "customize")
+          .map((category) => {
             const products = storeProducts.filter(
-            (product) => product.category === category.id
+              (product) => product.category === category.id
             );
 
             return (
-            <section
+              <section
                 key={category.id}
                 id={`store-section-${category.id}`}
                 className="store-section"
-            >
+              >
                 <div className="store-section-heading store-reveal">
-                <h2 className="store-section-title">
+                  <h2 className="store-section-title">
                     {category.name}
-                </h2>
+                  </h2>
 
-                <p className="store-section-description">
+                  <p className="store-section-description">
                     {category.description}
-                </p>
+                  </p>
                 </div>
 
                 <div className="store-product-grid">
-                {products.map(renderProductCard)}
+                  {products.map(renderProductCard)}
                 </div>
-            </section>
+              </section>
             );
-        })}
-    
+          })}
+
         {/* CUSTOMIZE PACKAGE BUILDER */}
         <section
           id="store-section-customize"
@@ -485,7 +573,7 @@ Thank you!
 
             {/* FIXED PACKAGES */}
             <div className="store-package-grid">
-              {STORE_PACKAGES.map((pkg) => (
+              {storePackages.map((pkg) => (
                 <article
                   key={pkg.id}
                   className={`store-package-card ${
@@ -511,7 +599,7 @@ Thank you!
                       <strong>Package includes:</strong>
 
                       {pkg.includes.map((included) => {
-                        const product = STORE_PRODUCTS.find(
+                        const product = storeProducts.find(
                           (item) => item.id === included.productId
                         );
 
@@ -551,7 +639,7 @@ Thank you!
                 </div>
 
                 <div className="store-extra-grid">
-                  {STORE_PRODUCTS.map((product) => (
+                  {storeProducts.map((product) => (
                     <div
                       className="store-extra-item"
                       key={product.id}
@@ -639,8 +727,9 @@ Thank you!
         </section>
 
       </div>
-            {/* CART OVERLAY */}
-            {/* PROFESSIONAL CART DRAWER */}
+
+      {/* CART OVERLAY */}
+      {/* PROFESSIONAL CART DRAWER */}
       {isCartOpen && (
         <div
           className="gd-cart-overlay"
@@ -788,6 +877,7 @@ Thank you!
                         <label htmlFor="store-customer-name">
                           Full Name <span>*</span>
                         </label>
+
                         <input
                           id="store-customer-name"
                           type="text"
@@ -803,6 +893,7 @@ Thank you!
                         <label htmlFor="store-customer-phone">
                           Contact Number <span>*</span>
                         </label>
+
                         <input
                           id="store-customer-phone"
                           type="tel"
@@ -818,6 +909,7 @@ Thank you!
                         <label htmlFor="store-customer-address">
                           Delivery Address <span>*</span>
                         </label>
+
                         <textarea
                           id="store-customer-address"
                           name="address"
@@ -833,6 +925,7 @@ Thank you!
                         <label htmlFor="store-event-date">
                           Event Date <small>(Optional)</small>
                         </label>
+
                         <input
                           id="store-event-date"
                           type="date"
@@ -845,9 +938,15 @@ Thank you!
                       <button
                         type="submit"
                         className="gd-cart-checkout"
+                        disabled={isSubmitting}
                       >
-                        <span>Generate Quotation</span>
-                        <span>→</span>
+                        <span>
+                          {isSubmitting
+                            ? "Saving Order..."
+                            : "Generate Quotation"}
+                        </span>
+
+                        <span>{isSubmitting ? "…" : "→"}</span>
                       </button>
 
                       <p className="gd-cart-secure-note">
@@ -868,6 +967,51 @@ Thank you!
               )}
             </div>
           </aside>
+        </div>
+      )}
+
+      {/* MIDNIGHT GOLD SUCCESS POPUP */}
+      {showSuccessModal && (
+        <div className="gd-success-overlay">
+          <div
+            className="gd-success-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gd-success-title"
+          >
+            <div className="gd-success-brand">
+              ✦ GOLDENDREAMS SAYS ✦
+            </div>
+
+            <div className="gd-success-icon">✓</div>
+
+            <h2 id="gd-success-title">
+              Quotation Generated!
+            </h2>
+
+            <p className="gd-success-message">
+              Your quotation has been generated and your order has
+              been saved successfully!
+            </p>
+
+            <div className="gd-success-divider" />
+
+            <h3>Thank You!</h3>
+
+            <p className="gd-success-thanks">
+              Thank you for choosing Golden Dreams.
+              <br />
+              We look forward to being part of your special moments.
+            </p>
+
+            <button
+              type="button"
+              className="gd-success-button"
+              onClick={() => setShowSuccessModal(false)}
+            >
+              Continue
+            </button>
+          </div>
         </div>
       )}
     </main>

@@ -194,18 +194,21 @@ export const generateStoreQuotation = async ({
     );
 
     // Add a new page if required
-    if (y + rowHeight > pageHeight - 35) {
+    if (y + rowHeight + 10 > pageHeight - 35) {
       pdf.addPage();
       y = 25;
       drawTableHeader();
     }
+
+    // Save product row starting position
+    const rowStartY = y;
 
     // Product name
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(9);
     pdf.setTextColor(...black);
 
-    pdf.text(productName, margin + 3, y);
+    pdf.text(productName, margin + 3, rowStartY);
 
     // Customized product details
     if (details.length > 0) {
@@ -216,7 +219,7 @@ export const generateStoreQuotation = async ({
       pdf.text(
         details,
         margin + 3,
-        y + nameHeight + 2
+        rowStartY + nameHeight + 2
       );
     }
 
@@ -225,7 +228,7 @@ export const generateStoreQuotation = async ({
     pdf.setFontSize(9);
     pdf.setTextColor(...black);
 
-    pdf.text(String(item.quantity), 117, y, {
+    pdf.text(String(item.quantity), 117, rowStartY, {
       align: "center",
     });
 
@@ -233,7 +236,7 @@ export const generateStoreQuotation = async ({
     pdf.text(
       `Rs. ${Number(item.price).toLocaleString("en-IN")}`,
       145,
-      y,
+      rowStartY,
       { align: "right" }
     );
 
@@ -243,15 +246,25 @@ export const generateStoreQuotation = async ({
     pdf.text(
       `Rs. ${amount.toLocaleString("en-IN")}`,
       pageWidth - margin - 3,
-      y,
+      rowStartY,
       { align: "right" }
     );
 
-    y += rowHeight + 3;
+    // Divider line below the complete product row
+    const dividerY = rowStartY + rowHeight + 1;
 
-    // Divider
     pdf.setDrawColor(225, 225, 225);
-    pdf.line(margin, y - 2, pageWidth - margin, y - 2);
+    pdf.setLineWidth(0.2);
+
+    pdf.line(
+      margin,
+      dividerY,
+      pageWidth - margin,
+      dividerY
+    );
+
+    // Space before next product
+    y = dividerY + 7;
   });
 
   // Grand total

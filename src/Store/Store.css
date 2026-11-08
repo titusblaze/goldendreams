@@ -2101,3 +2101,122 @@
   }
 
 }
+
+/* MIDNIGHT GOLD SUCCESS POPUP */
+.gd-success-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(9px);
+  animation: gdFadeIn 0.35s ease;
+}
+
+.gd-success-modal {
+  width: 100%;
+  max-width: 460px;
+  padding: 42px 32px;
+  text-align: center;
+  color: #f8edcf;
+  background:
+    radial-gradient(circle at top, rgba(177, 137, 55, 0.16), transparent 55%),
+    linear-gradient(145deg, #171717, #080808);
+  border: 1px solid rgba(211, 174, 94, 0.65);
+  border-radius: 18px;
+  box-shadow: 0 0 25px rgba(196, 153, 65, 0.15),
+    0 0 65px rgba(196, 153, 65, 0.08);
+  animation: gdModalAppear 0.45s ease;
+}
+
+.gd-success-brand {
+  margin-bottom: 25px;
+  color: #d9b66a;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 4px;
+}
+
+.gd-success-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 22px;
+  color: #e6c477;
+  font-size: 35px;
+  border: 1px solid #c5a052;
+  border-radius: 50%;
+  box-shadow: 0 0 22px rgba(205, 166, 85, 0.2);
+}
+
+.gd-success-modal h2 {
+  margin: 0 0 14px;
+  color: #e6c477;
+  font-size: 25px;
+}
+
+.gd-success-message {
+  color: #d2c9b5;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.gd-success-divider {
+  width: 75px;
+  height: 1px;
+  margin: 25px auto;
+  background: linear-gradient(90deg, transparent, #d2ae61, transparent);
+}
+
+.gd-success-modal h3 {
+  margin-bottom: 10px;
+  color: #e6c477;
+  font-size: 21px;
+}
+
+.gd-success-thanks {
+  color: #c5bba7;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.gd-success-button {
+  min-width: 155px;
+  margin-top: 25px;
+  padding: 13px 30px;
+  color: #17120a;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  background: linear-gradient(135deg, #f0d38d, #b68b3e);
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: 0.3s ease;
+}
+
+.gd-success-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 22px rgba(214, 174, 91, 0.3);
+}
+
+@keyframes gdFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes gdModalAppear {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
