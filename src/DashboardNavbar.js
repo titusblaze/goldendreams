@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect, useCallback } from "react";
 
 import {
@@ -48,50 +49,78 @@ export default function DashboardNavbar() {
   }, []);
 
   /* =========================================================
-     LOGOUT
+     LOGOUT WITH GOOGLE SHEETS ACTIVITY LOG
   ========================================================= */
 
-  const handleLogout = useCallback(() => {
-    // Clear all known login/session keys.
-    const localKeysToRemove = [
-      "sessionToken",
-      "isLoggedIn",
-      "username",
-      "userName",
-      "UserName",
-      "goldenDreamsUserName",
-    ];
+  const handleLogout = useCallback(async () => {
+    // Get token before clearing session data.
+    const token =
+      localStorage.getItem("sessionToken") ||
+      sessionStorage.getItem("sessionToken");
 
-    localKeysToRemove.forEach((key) => {
-      localStorage.removeItem(key);
-    });
+    let logoutRecorded = false;
 
-    const sessionKeysToRemove = [
-      "sessionToken",
-      "isLoggedIn",
-      "username",
-      "userName",
-      "UserName",
-      "goldenDreamsUserName",
-    ];
+    try {
+      if (token) {
+        const response = await fetch(
+          "https://golden-dreams-api-proxy.titus-blaze.workers.dev/logout",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
 
-    sessionKeysToRemove.forEach((key) => {
-      sessionStorage.removeItem(key);
-    });
+        const result = await response.json();
 
-    // Notify other components that logout has occurred.
-    window.dispatchEvent(new Event("golden-dreams-logout"));
+        if (response.ok && result.success === true) {
+          logoutRecorded = true;
+        } else {
+          console.warn(
+            "Logout activity could not be recorded:",
+            result.error || "Unknown error"
+          );
+        }
+      }
+    } catch (error) {
+      console.warn("Logout activity request failed:", error);
+    } finally {
+      // Clear all known login/session keys.
+      const keysToRemove = [
+        "sessionToken",
+        "isLoggedIn",
+        "username",
+        "userName",
+        "UserName",
+        "goldenDreamsUserName",
+      ];
 
-    // Navigate to login without keeping the dashboard as
-    // the current history entry.
-    navigate("/login", { replace: true });
+      keysToRemove.forEach((key) => {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      });
 
-    // Start the login page at the top.
-    window.scrollTo({
-      top: 0,
-      left: 0,
-      behavior: "auto",
-    });
+      // Notify other components that logout has occurred.
+      window.dispatchEvent(new Event("golden-dreams-logout"));
+
+      // Navigate to login.
+      navigate("/login", { replace: true });
+
+      // Start login page at the top.
+      window.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: "auto",
+      });
+    }
+
+    if (!logoutRecorded && token) {
+      console.warn(
+        "User logged out locally, but server logout was not confirmed."
+      );
+    }
   }, [navigate]);
 
   /* =========================================================
