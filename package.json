@@ -5,6 +5,9 @@
   "private": true,
   "main": "electron.js",
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.6",
@@ -41,39 +44,39 @@
     "electron": "electron .",
     "electron:build": "npm run build && electron-builder --win"
   },
-  
-    "build": {
-      "extends": null,
-      "appId": "com.goldendreamsfsv.desktop",
-      "productName": "Golden Dreams",
-      "directories": {
-        "output": "dist"
-      },
-      "files": [
-        "electron.js",
-        "package.json",
-        "assets/electron-icon.ico"
-      ],
-      "win": {
-        "icon": "assets/electron-icon.ico",
-        "target": [
-          {
-            "target": "nsis",
-            "arch": ["x64"]
-          }
-        ]
-      },
-      "nsis": {
-        "oneClick": false,
-        "allowToChangeInstallationDirectory": true,
-        "createDesktopShortcut": true,
-        "createStartMenuShortcut": true,
-        "installerIcon": "assets/electron-icon.ico",
-        "uninstallerIcon": "assets/electron-icon.ico",
-        "installerHeaderIcon": "assets/electron-icon.ico"
-      }
+  "build": {
+    "extends": null,
+    "appId": "com.goldendreamsfsv.desktop",
+    "productName": "Golden Dreams",
+    "directories": {
+      "output": "dist"
     },
-
+    "files": [
+      "electron.js",
+      "package.json",
+      "assets/electron-icon.ico"
+    ],
+    "win": {
+      "icon": "assets/electron-icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerIcon": "assets/electron-icon.ico",
+      "uninstallerIcon": "assets/electron-icon.ico",
+      "installerHeaderIcon": "assets/electron-icon.ico"
+    }
+  },
   "eslintConfig": {
     "extends": [
       "react-app",
@@ -93,6 +96,7 @@
     ]
   },
   "devDependencies": {
+    "@capacitor/assets": "^4.0.0",
     "electron": "^45.2.3",
     "electron-builder": "^26.18.0",
     "gh-pages": "^6.3.0",

@@ -24,3 +24,16 @@ yarn-error.log*
 /pdf-server/node_modules
 # Electron build output
 /dist
+
+# Android project
+/android/
+GoldenDreams.apk
+
+# Local icons
+/assets/icon.png
+/icons/
+/public/icon-background.png
+/public/logo1024.png
+
+# Local Capacitor configuration
+/capacitor.config.ts
