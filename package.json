@@ -3,6 +3,7 @@
   "name": "my-app",
   "version": "0.1.0",
   "private": true,
+  "main": "electron.js",
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
@@ -36,8 +37,43 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+    "deploy": "gh-pages -d build",
+    "electron": "electron .",
+    "electron:build": "npm run build && electron-builder --win"
   },
+  
+    "build": {
+      "extends": null,
+      "appId": "com.goldendreamsfsv.desktop",
+      "productName": "Golden Dreams",
+      "directories": {
+        "output": "dist"
+      },
+      "files": [
+        "electron.js",
+        "package.json",
+        "assets/electron-icon.ico"
+      ],
+      "win": {
+        "icon": "assets/electron-icon.ico",
+        "target": [
+          {
+            "target": "nsis",
+            "arch": ["x64"]
+          }
+        ]
+      },
+      "nsis": {
+        "oneClick": false,
+        "allowToChangeInstallationDirectory": true,
+        "createDesktopShortcut": true,
+        "createStartMenuShortcut": true,
+        "installerIcon": "assets/electron-icon.ico",
+        "uninstallerIcon": "assets/electron-icon.ico",
+        "installerHeaderIcon": "assets/electron-icon.ico"
+      }
+    },
+
   "eslintConfig": {
     "extends": [
       "react-app",
@@ -57,6 +93,9 @@
     ]
   },
   "devDependencies": {
-    "gh-pages": "^6.3.0"
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
+    "gh-pages": "^6.3.0",
+    "png-to-ico": "^3.0.2"
   }
 }
