@@ -2220,3 +2220,21 @@
     transform: translateY(0) scale(1);
   }
 }
+
+/* MOBILE PACKAGE CARD FIX */
+@media (max-width: 600px) {
+  .store-package-grid {
+    padding: 12px 9% 25px !important;
+    scroll-padding-inline: 9%;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    overflow-y: hidden;
+  }
+
+  .store-package-card {
+    flex: 0 0 82%;
+    scroll-snap-align: center;
+    margin-top: 0;
+  }
+
+}

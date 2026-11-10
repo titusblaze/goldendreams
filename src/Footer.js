@@ -13,6 +13,11 @@ import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { Link as RouterLink } from "react-router-dom";
 
+import { Button } from "@mui/material";
+import ComputerIcon from "@mui/icons-material/Computer";
+import AndroidIcon from "@mui/icons-material/Android";
+import AppleIcon from "@mui/icons-material/Apple";
+
 import FacebookIcon from "@mui/icons-material/Facebook";
 import InstagramIcon from "@mui/icons-material/Instagram";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
@@ -121,6 +126,18 @@ export default function Footer() {
     return links.filter((item) => item.url);
   }, [data]);
 
+  const downloadLinks = useMemo(() => {
+    const record = data.find(
+      (item) => String(item?.Id ?? "").trim() === "9"
+    );
+
+    return {
+      desktop: normalizeUrl(record?.LabelText1),
+      android: normalizeUrl(record?.LabelText2),
+      ios: normalizeUrl(record?.LabelText3),
+    };
+  }, [data]);
+
   const navigationLinks = [
     { label: "Home", path: "/" },
     { label: "Pricing", path: "/pricing" },
@@ -206,6 +223,81 @@ export default function Footer() {
         >
           YOUR MEMORIES · YOUR MOMENTS · YOUR STORY
         </Typography>
+
+        {/* Alpication Download Links */}
+        {/* App Download Buttons */}
+        {(downloadLinks.desktop ||
+          downloadLinks.android ||
+          downloadLinks.ios) && (
+          <Stack
+            direction="row"
+            justifyContent="center"
+            alignItems="center"
+            spacing={{ xs: 1, sm: 2 }}
+            sx={{
+              width: "100%",
+              maxWidth: 560,
+              mx: "auto",
+              mb: 3,
+              flexWrap: "nowrap",
+            }}
+          >
+            {[
+              {
+                url: downloadLinks.desktop,
+                label: "Windows",
+                icon: <ComputerIcon />,
+              },
+              {
+                url: downloadLinks.android,
+                label: "Android",
+                icon: <AndroidIcon />,
+              },
+              {
+                url: downloadLinks.ios,
+                label: "iOS",
+                icon: <AppleIcon />,
+              },
+            ]
+              .filter((item) => item.url)
+              .map((item) => (
+                <Button
+                  key={item.label}
+                  component="a"
+                  href={item.url}
+                  startIcon={item.icon}
+                  variant="outlined"
+                  sx={{
+                    flex: 1,
+                    minWidth: 0,
+                    whiteSpace: "nowrap",
+                    borderRadius: "30px",
+                    px: { xs: 0.8, sm: 2 },
+                    py: { xs: 1, sm: 1.2 },
+                    fontSize: { xs: "0.68rem", sm: "0.85rem" },
+                    fontWeight: 700,
+                    color: LIGHT_GOLD,
+                    borderColor: GOLD,
+                    background: "rgba(216,177,90,0.035)",
+                    transition: "all 0.25s ease",
+                    "& .MuiButton-startIcon": {
+                      mr: { xs: 0.5, sm: 1 },
+                      ml: 0,
+                    },
+                    "&:hover": {
+                      color: "#080808",
+                      borderColor: LIGHT_GOLD,
+                      background: `linear-gradient(135deg, ${GOLD}, ${LIGHT_GOLD})`,
+                      boxShadow: "0 0 18px rgba(216,177,90,0.18)",
+                      transform: "translateY(-2px)",
+                    },
+                  }}
+                >
+                  {item.label}
+                </Button>
+              ))}
+          </Stack>
+        )}
 
         {/* Navigation */}
         <Stack

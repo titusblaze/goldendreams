@@ -453,6 +453,7 @@ export default function LoginPdf1() {
             minWidth: 0,
             width: "fit-content",
             maxWidth: { xs: "55%", sm: "42%", md: "35%" },
+            height: { xs: 52 },
             flex: "0 1 auto",
             p: { xs: 0.7, sm: 1 },
             borderRadius: "0 0 15px 0",
@@ -514,6 +515,7 @@ export default function LoginPdf1() {
         <Box
           ref={menuContainerRef}
           sx={{
+            height: { xs: 52 },
             position: "relative",
             pointerEvents: "auto",
             display: "flex",

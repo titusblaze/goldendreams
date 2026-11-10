@@ -33,9 +33,9 @@ const fallbackSlides = [
   {
     id: "basic",
     title: "Basic Shoot",
-    price: "Rs.50,000.00",
+    price: "Rs.1,00,000.00",
     desc:
-      "Perfect for small indoor shoots and portraits. 1 hour session, basic retouching.",
+      "Perfect for Small indoor shoots, Birthday Events and Modelling Portraits. 1 hour session, basic retouching.",
     bg: "https://images.unsplash.com/photo-1519183071298-a2962be96dcd?q=80&w=1600&auto=format&fit=crop",
     sample:
       "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=800&auto=format&fit=crop",
@@ -44,9 +44,9 @@ const fallbackSlides = [
   {
     id: "pro",
     title: "Professional",
-    price: "Rs.1,00,000.00",
+    price: "Rs.3,00,000.00",
     desc:
-      "Ideal for weddings, events, and outdoor sessions. 3 hour coverage + editing.",
+      "Ideal for Traditional weddings and Traditional events 3 hour coverage + editing.",
     bg: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=1600&auto=format&fit=crop",
     sample:
       "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=800&auto=format&fit=crop",
@@ -55,9 +55,9 @@ const fallbackSlides = [
   {
     id: "cinematic",
     title: "Cinematic Premium",
-    price: "2,00,000.00",
+    price: "10,00,000.00",
     desc:
-      "High-end lighting, drone shots, and advanced editing. Full production crew.",
+      "Grand Events With High-end lighting, drone shots, Candid and advanced editing. Full production crew.",
     bg: "https://images.unsplash.com/photo-1499084732479-de2c02d45fc4?q=80&w=1600&auto=format&fit=crop",
     sample:
       "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=800&auto=format&fit=crop",
