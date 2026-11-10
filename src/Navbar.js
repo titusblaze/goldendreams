@@ -1,13 +1,34 @@
+
 import React, { useState, useEffect, useRef } from "react";
 import { Box, Button } from "@mui/material";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+
+const navItems = [
+  ["HOME", "/"],
+  ["PRICING", "/pricing"],
+  ["FEATURES", "/features"],
+  ["STORE", "/store"],
+  ["CONTACT", "/contact"],
+  ["LIVE", "/live"],
+  ["LOGIN", "/login"],
+];
 
 const Navbar = () => {
-  const [activeBtn, setActiveBtn] = useState(null);
+  const location = useLocation();
+
   const [hoverBtn, setHoverBtn] = useState(null);
-  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+  const [indicatorStyle, setIndicatorStyle] = useState({
+    left: 0,
+    width: 0,
+  });
+
   const buttonsRef = useRef({});
 
+  // Automatically identify active page from current URL
+  const activeBtn =
+    navItems.find(([, link]) => link === location.pathname)?.[0] || null;
+
+  // Update indicator on page change, Back, Forward and hover
   useEffect(() => {
     const current = hoverBtn || activeBtn;
     const btn = buttonsRef.current[current];
@@ -21,9 +42,7 @@ const Navbar = () => {
         width: rect.width,
       });
     }
-  }, [hoverBtn, activeBtn]);
-
-  
+  }, [hoverBtn, activeBtn, location.pathname]);
 
   return (
     <Box
@@ -64,15 +83,7 @@ const Navbar = () => {
           />
         )}
 
-        {[
-          ["HOME", "/"],
-          ["PRICING", "/pricing"],
-          ["FEATURES", "/features"],
-          ["STORE", "/store"],
-          ["CONTACT", "/contact"],
-          ["LIVE", "/live"],
-          ["LOGIN", "/login"],
-        ].map(([label, link]) => (
+        {navItems.map(([label, link]) => (
           <Button
             key={label}
             component={Link}
@@ -81,27 +92,30 @@ const Navbar = () => {
             ref={(el) => (buttonsRef.current[label] = el)}
             onMouseEnter={() => setHoverBtn(label)}
             onMouseLeave={() => setHoverBtn(null)}
-            onClick={() => {setActiveBtn(label);
-              window.scrollTo({ top: 0, behavior: "smooth" });
+            onClick={() => {
+              window.scrollTo({
+                top: 0,
+                behavior: "smooth",
+              });
             }}
             sx={{
-                zIndex: 1,
-                padding: "0.6rem 1.6rem",
-                fontSize: "1rem",
-                color: activeBtn === label ? "#FFD700" : "#fff",
-                fontWeight: activeBtn === label ? "bold" : "normal",
+              zIndex: 1,
+              padding: "0.6rem 1.6rem",
+              fontSize: "1rem",
+              color: activeBtn === label ? "#FFD700" : "#fff",
+              fontWeight: activeBtn === label ? "bold" : "normal",
+              backgroundColor: "transparent",
+              "&:hover": {
                 backgroundColor: "transparent",
-                "&:hover": {
-                  backgroundColor: "transparent",
-                  color: "#FFD700",
-                },
-                "&:focus": {
-                  backgroundColor: "transparent",
-                },
-                "&:active": {
-                  backgroundColor: "transparent",
-                },
-              }}
+                color: "#FFD700",
+              },
+              "&:focus": {
+                backgroundColor: "transparent",
+              },
+              "&:active": {
+                backgroundColor: "transparent",
+              },
+            }}
           >
             {label}
           </Button>

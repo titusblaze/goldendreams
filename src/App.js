@@ -47,61 +47,11 @@ function ProtectedRoute({ children }) {
     () => hasValidLocalSession()
   );
 
+
   useEffect(() => {
-    const dashboardUrl = window.location.href;
-
     const checkSession = () => {
-      const validSession = hasValidLocalSession();
-      setIsAuthenticated(validSession);
+      setIsAuthenticated(hasValidLocalSession());
     };
-
-    /*
-      Add a protected history entry.
-
-      This makes the mobile browser Back button
-      stay on the dashboard while the session is valid.
-    */
-
-    if (
-      !window.history.state?.protectedDashboard
-    ) {
-      window.history.pushState(
-        {
-          ...(window.history.state || {}),
-          protectedDashboard: true,
-        },
-        "",
-        dashboardUrl
-      );
-    }
-
-    /*
-      Handle browser Back navigation.
-
-      Capture phase is used so this handler runs
-      before React Router processes the popstate event.
-    */
-
-    const handlePopState = () => {
-      if (hasValidLocalSession()) {
-        window.history.pushState(
-          {
-            ...(window.history.state || {}),
-            protectedDashboard: true,
-          },
-          "",
-          dashboardUrl
-        );
-      } else {
-        setIsAuthenticated(false);
-      }
-    };
-
-    window.addEventListener(
-      "popstate",
-      handlePopState,
-      true
-    );
 
     // Check when restored from browser history / cache
     window.addEventListener("pageshow", checkSession);
@@ -124,21 +74,8 @@ function ProtectedRoute({ children }) {
     checkSession();
 
     return () => {
-      window.removeEventListener(
-        "popstate",
-        handlePopState,
-        true
-      );
-
-      window.removeEventListener(
-        "pageshow",
-        checkSession
-      );
-
-      window.removeEventListener(
-        "storage",
-        checkSession
-      );
+      window.removeEventListener("pageshow", checkSession);
+      window.removeEventListener("storage", checkSession);
 
       window.removeEventListener(
         "golden-dreams-logout",
@@ -151,6 +88,7 @@ function ProtectedRoute({ children }) {
       );
     };
   }, []);
+
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
