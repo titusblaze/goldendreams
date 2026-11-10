@@ -7,7 +7,10 @@ import {
   Route,
   Navigate,
   useLocation,
+  useNavigate,
 } from "react-router-dom";
+
+import { App as CapacitorApp } from "@capacitor/app";
 import { Box, useMediaQuery } from "@mui/material";
 import { motion } from "framer-motion";
 import SplashScreen from "./SplashScreen";
@@ -311,6 +314,7 @@ function MidnightGoldAnimation() {
 function App() {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const location = useLocation();
+  const navigate = useNavigate();
   const [showSplash, setShowSplash] = useState(true);
     useEffect(() => {
       const timer = setTimeout(() => {
@@ -319,6 +323,47 @@ function App() {
 
   return () => clearTimeout(timer);
 }, []);
+
+  // New Android Back Button Handling
+
+  useEffect(() => {
+    let backButtonListener;
+    let isMounted = true;
+
+    const setupBackButton = async () => {
+      const listener = await CapacitorApp.addListener(
+        "backButton",
+        ({ canGoBack }) => {
+          const historyIndex = window.history.state?.idx;
+
+          if (
+            typeof historyIndex === "number" &&
+            historyIndex > 0
+          ) {
+            navigate(-1);
+          } else if (canGoBack) {
+            window.history.back();
+          } else {
+            CapacitorApp.exitApp();
+          }
+        }
+      );
+
+      if (isMounted) {
+        backButtonListener = listener;
+      } else {
+        listener.remove();
+      }
+    };
+
+    setupBackButton();
+
+    return () => {
+      isMounted = false;
+      backButtonListener?.remove();
+    };
+  }, [navigate]);
+
   const navbarPages = [
     "/",
     "/pricing",
