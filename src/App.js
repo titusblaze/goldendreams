@@ -1,4 +1,3 @@
-
 import "./App.css";
 
 import { useMemo, useEffect, useState } from "react";
@@ -50,25 +49,19 @@ function ProtectedRoute({ children }) {
     () => hasValidLocalSession()
   );
 
-
   useEffect(() => {
     const checkSession = () => {
       setIsAuthenticated(hasValidLocalSession());
     };
 
-    // Check when restored from browser history / cache
     window.addEventListener("pageshow", checkSession);
-
-    // Check when storage changes in another tab
     window.addEventListener("storage", checkSession);
 
-    // Check when logout is triggered
     window.addEventListener(
       "golden-dreams-logout",
       checkSession
     );
 
-    // Check when returning to the browser tab
     document.addEventListener(
       "visibilitychange",
       checkSession
@@ -92,7 +85,6 @@ function ProtectedRoute({ children }) {
     };
   }, []);
 
-
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
@@ -102,6 +94,7 @@ function ProtectedRoute({ children }) {
 
 /* =========================================================
    MIDNIGHT GOLD BACKGROUND ANIMATION
+   PRESERVED FOR ALL PAGES
 ========================================================= */
 
 function MidnightGoldAnimation() {
@@ -235,8 +228,7 @@ function MidnightGoldAnimation() {
           }}
         />
       ))}
-
-      {/* Slow-moving celestial light trails */}
+            {/* Slow-moving celestial light trails */}
 
       {lightTrails.map((trail) => (
         <motion.div
@@ -315,16 +307,340 @@ function App() {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const location = useLocation();
   const navigate = useNavigate();
+
   const [showSplash, setShowSplash] = useState(true);
-    useEffect(() => {
-      const timer = setTimeout(() => {
-        setShowSplash(false);
-      }, 2500);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pullProgress, setPullProgress] = useState(0);
 
-  return () => clearTimeout(timer);
-}, []);
+  /* =========================================================
+     SPLASH SCREEN
+  ========================================================= */
 
-  // New Android Back Button Handling
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+    /* =========================================================
+     GLOBAL PULL TO REFRESH
+     MIDNIGHT GOLDEN GLOW
+  ========================================================= */
+
+  useEffect(() => {
+    let startY = 0;
+    let isPulling = false;
+    let shouldRefresh = false;
+    let refreshTimer;
+
+    const REFRESH_THRESHOLD = 85;
+
+    const getScrollTop = () => {
+      return Math.max(
+        window.scrollY || 0,
+        document.documentElement.scrollTop || 0,
+        document.body.scrollTop || 0
+      );
+    };
+
+    const isModalOpen = () =>
+      Boolean(
+        document.querySelector(
+          '[role="dialog"], .MuiModal-root, .MuiPopover-root'
+        )
+      );
+
+    const handleTouchStart = (event) => {
+      const target =
+        event.target instanceof Element ? event.target : null;
+
+      if (
+        isRefreshing ||
+        getScrollTop() > 0 ||
+        isModalOpen() ||
+        event.touches.length !== 1 ||
+        target?.closest(
+          'input, textarea, select, iframe, [role="dialog"], .MuiModal-root'
+        )
+      ) {
+        isPulling = false;
+        shouldRefresh = false;
+        return;
+      }
+
+      startY = event.touches[0].clientY;
+      isPulling = true;
+      shouldRefresh = false;
+
+      setPullProgress(0);
+    };
+
+    const handleTouchMove = (event) => {
+      if (
+        !isPulling ||
+        isRefreshing ||
+        isModalOpen() ||
+        event.touches.length !== 1
+      ) {
+        return;
+      }
+
+      const currentY = event.touches[0].clientY;
+      const distance = currentY - startY;
+
+      if (distance <= 0) {
+        setPullProgress(0);
+        shouldRefresh = false;
+        return;
+      }
+
+      if (getScrollTop() <= 0) {
+        if (event.cancelable) {
+          event.preventDefault();
+        }
+
+        // Pull indicator progress (85px threshold)
+        setPullProgress(
+          Math.min(distance / REFRESH_THRESHOLD, 1)
+        );
+
+        // Refresh threshold
+        shouldRefresh = distance >= REFRESH_THRESHOLD;
+      }
+    };
+
+    const handleTouchEnd = () => {
+      if (shouldRefresh && isPulling && !isRefreshing) {
+        setPullProgress(1);
+        setIsRefreshing(true);
+
+        // Show Splash Screen before refreshing
+        setShowSplash(true);
+
+        // Reload the current page
+        refreshTimer = setTimeout(() => {
+          window.location.reload();
+        }, 1200);
+      } else {
+        setPullProgress(0);
+      }
+
+      isPulling = false;
+      shouldRefresh = false;
+      startY = 0;
+    };
+
+    const handleTouchCancel = () => {
+      isPulling = false;
+      shouldRefresh = false;
+      startY = 0;
+
+      if (!isRefreshing) {
+        setPullProgress(0);
+      }
+    };
+
+    // Touch event listeners
+    document.addEventListener("touchstart", handleTouchStart, {
+      passive: true,
+      capture: true,
+    });
+
+    document.addEventListener("touchmove", handleTouchMove, {
+      passive: false,
+      capture: true,
+    });
+
+    document.addEventListener("touchend", handleTouchEnd, {
+      capture: true,
+    });
+
+    document.addEventListener("touchcancel", handleTouchCancel, {
+      capture: true,
+    });
+
+    // Cleanup
+    return () => {
+      clearTimeout(refreshTimer);
+
+      document.removeEventListener(
+        "touchstart",
+        handleTouchStart,
+        true
+      );
+
+      document.removeEventListener(
+        "touchmove",
+        handleTouchMove,
+        true
+      );
+
+      document.removeEventListener(
+        "touchend",
+        handleTouchEnd,
+        true
+      );
+
+      document.removeEventListener(
+        "touchcancel",
+        handleTouchCancel,
+        true
+      );
+    };
+  }, [isRefreshing]);
+
+
+  /* =========================================================
+     MOBILE HORIZONTAL SWIPE NAVIGATION
+     PUBLIC PAGES ONLY
+  ========================================================= */
+
+  useEffect(() => {
+    const pages = [
+      "/",
+      "/pricing",
+      "/features",
+      "/contact",
+      "/store",
+      "/live",
+      "/login",
+    ];
+
+    let startX = 0;
+    let startY = 0;
+    let endX = 0;
+    let endY = 0;
+
+    let tracking = false;
+    let horizontalSwipe = false;
+
+    const SWIPE_THRESHOLD = 75;
+    const VERTICAL_LIMIT = 60;
+
+    const handleTouchStart = (event) => {
+      if (event.touches.length !== 1) {
+        tracking = false;
+        return;
+      }
+
+      const target =
+        event.target instanceof Element ? event.target : null;
+
+      if (
+        !target ||
+        target.closest(
+          'button, a, input, textarea, select, [role="button"], [role="link"], nav, [data-no-swipe]'
+        )
+      ) {
+        tracking = false;
+        return;
+      }
+
+      if (
+        location.pathname === "/dashboard" ||
+        !pages.includes(location.pathname)
+      ) {
+        tracking = false;
+        return;
+      }
+
+      startX = event.touches[0].clientX;
+      startY = event.touches[0].clientY;
+      endX = startX;
+      endY = startY;
+
+      tracking = true;
+      horizontalSwipe = false;
+    };
+
+    const handleTouchMove = (event) => {
+      if (!tracking || event.touches.length !== 1) return;
+
+      endX = event.touches[0].clientX;
+      endY = event.touches[0].clientY;
+
+      const deltaX = endX - startX;
+      const deltaY = endY - startY;
+
+      if (Math.abs(deltaY) > VERTICAL_LIMIT &&
+          Math.abs(deltaY) > Math.abs(deltaX)) {
+        tracking = false;
+        return;
+      }
+
+      if (Math.abs(deltaX) > 15 &&
+          Math.abs(deltaX) > Math.abs(deltaY) * 1.3) {
+        horizontalSwipe = true;
+      }
+    };
+
+    const handleTouchEnd = () => {
+      if (!tracking || !horizontalSwipe) {
+        tracking = false;
+        return;
+      }
+
+      const deltaX = endX - startX;
+      const deltaY = endY - startY;
+
+      if (
+        Math.abs(deltaX) >= SWIPE_THRESHOLD &&
+        Math.abs(deltaX) > Math.abs(deltaY) * 1.3
+      ) {
+        const currentIndex = pages.indexOf(location.pathname);
+
+        if (currentIndex !== -1) {
+          if (deltaX < 0 && currentIndex < pages.length - 1) {
+            navigate(pages[currentIndex + 1]);
+          } else if (deltaX > 0 && currentIndex > 0) {
+            navigate(pages[currentIndex - 1]);
+          }
+        }
+      }
+
+      tracking = false;
+      horizontalSwipe = false;
+    };
+
+    const handleTouchCancel = () => {
+      tracking = false;
+      horizontalSwipe = false;
+    };
+
+    document.addEventListener("touchstart", handleTouchStart, {
+      passive: true,
+      capture: true,
+    });
+
+    document.addEventListener("touchmove", handleTouchMove, {
+      passive: true,
+      capture: true,
+    });
+
+    document.addEventListener("touchend", handleTouchEnd, {
+      passive: true,
+      capture: true,
+    });
+
+    document.addEventListener("touchcancel", handleTouchCancel, {
+      passive: true,
+      capture: true,
+    });
+
+    return () => {
+      document.removeEventListener("touchstart", handleTouchStart, true);
+      document.removeEventListener("touchmove", handleTouchMove, true);
+      document.removeEventListener("touchend", handleTouchEnd, true);
+      document.removeEventListener("touchcancel", handleTouchCancel, true);
+    };
+  }, [location.pathname, navigate]);
+
+
+    /* =========================================================
+     ANDROID BACK BUTTON HANDLING
+  ========================================================= */
 
   useEffect(() => {
     let backButtonListener;
@@ -364,6 +680,10 @@ function App() {
     };
   }, [navigate]);
 
+  /* =========================================================
+     NAVBAR CONFIGURATION
+  ========================================================= */
+
   const navbarPages = [
     "/",
     "/pricing",
@@ -376,9 +696,60 @@ function App() {
 
   const showNavbar = navbarPages.includes(location.pathname);
 
+  /* =========================================================
+     APP RETURN
+  ========================================================= */
+
   return (
     <div className="App">
+
+      {/* TOP-ONLY PULL TO REFRESH GOLDEN GLOW */}
+
+      {(pullProgress > 0 || isRefreshing) && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "28px",
+            zIndex: 99999,
+            pointerEvents: "none",
+            overflow: "hidden",
+            background:
+              "radial-gradient(ellipse at top, rgba(218,165,32,0.25), transparent 75%)",
+          }}
+        >
+          <motion.div
+            animate={{
+              scaleX: isRefreshing ? 1 : pullProgress,
+              opacity: isRefreshing ? 1 : 0.4 + pullProgress * 0.6,
+            }}
+            transition={{ duration: 0.15 }}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "3px",
+              transformOrigin: "left",
+              background:
+                "linear-gradient(90deg, transparent, #B8860B, #FFE6A0, #D4AF37, transparent)",
+              boxShadow:
+                "0 0 8px #D4AF37, 0 0 18px rgba(255,215,0,0.7)",
+            }}
+          />
+        </motion.div>
+      )}
+
+      {/* SPLASH SCREEN */}
+
       {showSplash && <SplashScreen />}
+
+      {/* APP BACKGROUND */}
+
       <Box
         sx={{
           position: "relative",
@@ -392,7 +763,8 @@ function App() {
             "linear-gradient(135deg, #030303 0%, #0a0906 48%, #11100c 100%)",
         }}
       >
-        {/* BACKGROUND MOTION */}
+
+        {/* EXISTING MIDNIGHT GOLD BACKGROUND ANIMATION */}
 
         <MidnightGoldAnimation />
 
@@ -408,6 +780,7 @@ function App() {
             flexDirection: "column",
           }}
         >
+
           {/* PUBLIC NAVBAR */}
 
           {showNavbar &&
@@ -426,7 +799,8 @@ function App() {
             <ScrollToTop />
 
             <Routes>
-              {/* Public pages */}
+
+              {/* PUBLIC PAGES */}
 
               <Route path="/" element={<Home />} />
 
@@ -465,7 +839,7 @@ function App() {
                 element={<Login />}
               />
 
-              {/* Protected dashboard */}
+              {/* PROTECTED DASHBOARD */}
 
               <Route
                 path="/dashboard"
@@ -480,12 +854,13 @@ function App() {
                 }
               />
 
-              {/* Unknown URLs return to the home page */}
+              {/* UNKNOWN URLS RETURN TO HOME */}
 
               <Route
                 path="*"
                 element={<Navigate to="/" replace />}
               />
+
             </Routes>
           </Box>
 
@@ -494,6 +869,7 @@ function App() {
           {location.pathname !== "/dashboard" && (
             <Footer />
           )}
+
         </Box>
       </Box>
     </div>

@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   Box,
   Tabs,
@@ -21,11 +21,124 @@ const GOLD = "#D9B568";
 const GOLD_LIGHT = "#F5E4B2";
 const TEXT_MUTED = "rgba(239,231,214,0.58)";
 
+const SWIPE_THRESHOLD = 75;
+const VERTICAL_LIMIT = 60;
+
 export default function LoginComponent() {
   const [activeTab, setActiveTab] = useState(0);
 
+  const touchStart = useRef({ x: 0, y: 0 });
+  const touchEnd = useRef({ x: 0, y: 0 });
+  const isTracking = useRef(false);
+  const isHorizontalSwipe = useRef(false);
+
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
+  };
+
+  /* =========================================================
+     DASHBOARD TAB SWIPE NAVIGATION
+     Photos → Albums → Videos
+  ========================================================= */
+
+  const handleTouchStart = (event) => {
+    if (event.touches.length !== 1) {
+      isTracking.current = false;
+      return;
+    }
+
+    const target =
+      event.target instanceof Element ? event.target : null;
+
+    // Do not interfere with interactive elements or media controls.
+    if (
+      !target ||
+      target.closest(
+        'button, a, input, textarea, select, video, audio, iframe, [role="button"], [role="link"], [data-no-swipe]'
+      )
+    ) {
+      isTracking.current = false;
+      return;
+    }
+
+    const touch = event.touches[0];
+
+    touchStart.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+    };
+
+    touchEnd.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+    };
+
+    isTracking.current = true;
+    isHorizontalSwipe.current = false;
+  };
+
+  const handleTouchMove = (event) => {
+    if (!isTracking.current || event.touches.length !== 1) {
+      return;
+    }
+
+    const touch = event.touches[0];
+
+    touchEnd.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+    };
+
+    const deltaX = touchEnd.current.x - touchStart.current.x;
+    const deltaY = touchEnd.current.y - touchStart.current.y;
+
+    // Stop tracking vertical movement. Normal scrolling remains enabled.
+    if (
+      Math.abs(deltaY) > VERTICAL_LIMIT &&
+      Math.abs(deltaY) > Math.abs(deltaX)
+    ) {
+      isTracking.current = false;
+      return;
+    }
+
+    if (
+      Math.abs(deltaX) > 15 &&
+      Math.abs(deltaX) > Math.abs(deltaY) * 1.3
+    ) {
+      isHorizontalSwipe.current = true;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!isTracking.current || !isHorizontalSwipe.current) {
+      isTracking.current = false;
+      isHorizontalSwipe.current = false;
+      return;
+    }
+
+    const deltaX = touchEnd.current.x - touchStart.current.x;
+    const deltaY = touchEnd.current.y - touchStart.current.y;
+
+    if (
+      Math.abs(deltaX) >= SWIPE_THRESHOLD &&
+      Math.abs(deltaX) > Math.abs(deltaY) * 1.3
+    ) {
+      if (deltaX < 0) {
+        // Swipe left: Next tab
+        setActiveTab((current) => Math.min(current + 1, 2));
+      } else {
+        // Swipe right: Previous tab
+        setActiveTab((current) => Math.max(current - 1, 0));
+      }
+    }
+
+    isTracking.current = false;
+    isHorizontalSwipe.current = false;
+  };
+
+  const handleTouchCancel = () => {
+    isTracking.current = false;
+    isHorizontalSwipe.current = false;
   };
 
   const tabs = [
@@ -93,7 +206,6 @@ export default function LoginComponent() {
           width: "100%",
           boxSizing: "border-box",
 
-          // Space below the fixed DashboardNavbar
           pt: {
             xs: "76px",
             sm: "88px",
@@ -298,8 +410,12 @@ export default function LoginComponent() {
         </Paper>
       </Box>
 
-      {/* MAIN CONTENT */}
+      {/* MAIN CONTENT WITH SWIPE NAVIGATION */}
       <Box
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchCancel}
         sx={{
           position: "relative",
           zIndex: 1,

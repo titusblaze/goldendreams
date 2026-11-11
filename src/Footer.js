@@ -6,70 +6,52 @@ import {
   Stack,
   IconButton,
   Link,
-  Tooltip,
   CircularProgress,
 } from "@mui/material";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { Link as RouterLink } from "react-router-dom";
-
+import { Link as RouterLink, useLocation } from "react-router-dom";
 import { Button } from "@mui/material";
 import ComputerIcon from "@mui/icons-material/Computer";
 import AndroidIcon from "@mui/icons-material/Android";
 import AppleIcon from "@mui/icons-material/Apple";
-
 import FacebookIcon from "@mui/icons-material/Facebook";
 import InstagramIcon from "@mui/icons-material/Instagram";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import TwitterIcon from "@mui/icons-material/Twitter";
 import YouTubeIcon from "@mui/icons-material/YouTube";
-
 import { getAllApiData } from "./api";
-
 const GOLD = "#D8B15A";
 const LIGHT_GOLD = "#F5D990";
-
 const fetchFooterData = async () => {
   const result = await getAllApiData();
-
   if (!Array.isArray(result)) {
     throw new Error("Invalid API response.");
   }
-
   return result;
 };
-
 const normalizeUrl = (value) => {
   if (value === null || value === undefined) return "";
-
   const url = String(value).trim();
-
   if (!url || url === "#" || url.toLowerCase() === "null") {
     return "";
   }
-
   // Accept only valid HTTP or HTTPS URLs.
   if (/^https?:\/\//i.test(url)) {
     return url;
   }
-
   return "";
 };
-
 const normalizePhone = (value) => {
   if (value === null || value === undefined) return "";
-
   const phone = String(value).replace(/\D/g, "");
-
   if (!phone) return "";
-
   // Assume an Indian number if the country code is omitted.
   if (phone.length === 10) return `91${phone}`;
-
   return phone;
 };
-
 export default function Footer() {
+  const location = useLocation();
   const {
     data = [],
     isLoading,
@@ -79,20 +61,16 @@ export default function Footer() {
     queryFn: fetchFooterData,
     staleTime: 1000 * 60 * 10,
   });
-
   const socialLinks = useMemo(() => {
     const record = data.find(
       (item) => String(item?.Id ?? "").trim() === "9"
     );
-
     if (!record) return [];
-
     const facebook = normalizeUrl(record.link);
     const instagram = normalizeUrl(record.link1);
     const whatsappPhone = normalizePhone(record.link2);
     const twitter = normalizeUrl(record.mlink);
     const youtube = normalizeUrl(record.LabelText);
-
     const links = [
       {
         name: "Facebook",
@@ -122,22 +100,25 @@ export default function Footer() {
         icon: <YouTubeIcon />,
       },
     ];
-
     return links.filter((item) => item.url);
   }, [data]);
-
   const downloadLinks = useMemo(() => {
     const record = data.find(
       (item) => String(item?.Id ?? "").trim() === "9"
     );
 
+    const isYes = (value) =>
+      String(value ?? "").trim().toLowerCase() === "yes";
+
     return {
       desktop: normalizeUrl(record?.LabelText1),
       android: normalizeUrl(record?.LabelText2),
       ios: normalizeUrl(record?.LabelText3),
+      desktopNotice: isYes(record?.Heading1),
+      androidNotice: isYes(record?.Heading2),
+      iosNotice: isYes(record?.Heading3),
     };
   }, [data]);
-
   const navigationLinks = [
     { label: "Home", path: "/" },
     { label: "Pricing", path: "/pricing" },
@@ -146,7 +127,6 @@ export default function Footer() {
     { label: "Live", path: "/live" },
     { label: "Login", path: "/login" },
   ];
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 35, scale: 0.98 }}
@@ -211,7 +191,6 @@ export default function Footer() {
         >
           Golden Dreams
         </Typography>
-
         <Typography
           sx={{
             mb: 3,
@@ -223,7 +202,6 @@ export default function Footer() {
         >
           YOUR MEMORIES · YOUR MOMENTS · YOUR STORY
         </Typography>
-
         {/* Alpication Download Links */}
         {/* App Download Buttons */}
         {(downloadLinks.desktop ||
@@ -247,58 +225,96 @@ export default function Footer() {
                 url: downloadLinks.desktop,
                 label: "Windows",
                 icon: <ComputerIcon />,
+                notice: downloadLinks.desktopNotice,
               },
               {
                 url: downloadLinks.android,
                 label: "Android",
                 icon: <AndroidIcon />,
+                notice: downloadLinks.androidNotice,
               },
               {
                 url: downloadLinks.ios,
                 label: "iOS",
                 icon: <AppleIcon />,
+                notice: downloadLinks.iosNotice,
               },
             ]
               .filter((item) => item.url)
               .map((item) => (
-                <Button
+                <Stack
                   key={item.label}
-                  component="a"
-                  href={item.url}
-                  startIcon={item.icon}
-                  variant="outlined"
-                  sx={{
-                    flex: 1,
-                    minWidth: 0,
-                    whiteSpace: "nowrap",
-                    borderRadius: "30px",
-                    px: { xs: 0.8, sm: 2 },
-                    py: { xs: 1, sm: 1.2 },
-                    fontSize: { xs: "0.68rem", sm: "0.85rem" },
-                    fontWeight: 700,
-                    color: LIGHT_GOLD,
-                    borderColor: GOLD,
-                    background: "rgba(216,177,90,0.035)",
-                    transition: "all 0.25s ease",
-                    "& .MuiButton-startIcon": {
-                      mr: { xs: 0.5, sm: 1 },
-                      ml: 0,
-                    },
-                    "&:hover": {
-                      color: "#080808",
-                      borderColor: LIGHT_GOLD,
-                      background: `linear-gradient(135deg, ${GOLD}, ${LIGHT_GOLD})`,
-                      boxShadow: "0 0 18px rgba(216,177,90,0.18)",
-                      transform: "translateY(-2px)",
-                    },
-                  }}
+                  alignItems="center"
+                  spacing={0.65}
+                  sx={{ flex: 1, minWidth: 0 }}
                 >
-                  {item.label}
-                </Button>
+                  {item.notice && (
+                    <Box
+                      component="span"
+                      sx={{
+                        px: 1,
+                        py: 0.35,
+                        borderRadius: "5px 5px 5px 0",
+                        background: "linear-gradient(135deg, #B3261E, #E34B3F)",
+                        color: "#FFFFFF",
+                        fontSize: { xs: "0.55rem", sm: "0.62rem" },
+                        fontWeight: 800,
+                        lineHeight: 1.2,
+                        letterSpacing: "0.035em",
+                        textTransform: "uppercase",
+                        whiteSpace: "nowrap",
+                        boxShadow: "0 2px 8px rgba(179,38,30,0.28)",
+                        position: "relative",
+                        "&::after": {
+                          content: '""',
+                          position: "absolute",
+                          left: 0,
+                          bottom: -4,
+                          borderTop: "4px solid #B3261E",
+                          borderRight: "4px solid transparent",
+                        },
+                      }}
+                    >
+                      New / Update Available
+                    </Box>
+                  )}
+                  <Button
+                    component="a"
+                    href={item.url}
+                    startIcon={item.icon}
+                    variant="outlined"
+                    sx={{
+                      width: "100%",
+                      minWidth: 0,
+                      whiteSpace: "nowrap",
+                      borderRadius: "30px",
+                      px: { xs: 0.8, sm: 2 },
+                      py: { xs: 1, sm: 1.2 },
+                      fontSize: { xs: "0.68rem", sm: "0.85rem" },
+                      fontWeight: 700,
+                      color: LIGHT_GOLD,
+                      borderColor: GOLD,
+                      background: "rgba(216,177,90,0.035)",
+                      transition: "all 0.25s ease",
+                      "& .MuiButton-startIcon": {
+                        mr: { xs: 0.5, sm: 1 },
+                        ml: 0,
+                      },
+                      "&:hover": {
+                        color: "#080808",
+                        borderColor: LIGHT_GOLD,
+                        background: `linear-gradient(135deg, ${GOLD}, ${LIGHT_GOLD})`,
+                        boxShadow: "0 0 18px rgba(216,177,90,0.18)",
+                        transform: "translateY(-2px)",
+                      },
+                    }}
+                  >
+                    {item.label}
+                  </Button>
+                </Stack>
               ))}
           </Stack>
         )}
-
         {/* Navigation */}
         <Stack
           direction="row"
@@ -314,43 +330,49 @@ export default function Footer() {
             rowGap: 1.5,
           }}
         >
-          {navigationLinks.map((item) => (
-            <Link
-              key={item.path}
-              component={RouterLink}
-              to={item.path}
-              underline="none"
-              sx={{
-                position: "relative",
-                px: 0.4,
-                py: 0.5,
-                color: "rgba(255,255,255,0.76)",
-                fontSize: { xs: "0.85rem", sm: "0.95rem" },
-                fontWeight: 500,
-                transition: "color 0.25s ease",
-                "&:hover": {
-                  color: LIGHT_GOLD,
-                },
-                "&::after": {
-                  content: '""',
-                  position: "absolute",
-                  left: 0,
-                  bottom: 0,
-                  width: 0,
-                  height: "1px",
-                  background: GOLD,
-                  transition: "width 0.25s ease",
-                },
-                "&:hover::after": {
-                  width: "100%",
-                },
-              }}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </Stack>
+          {navigationLinks.map((item) => {
+            const isActive =
+              location.pathname === item.path ||
+              (item.path !== "/" && location.pathname.startsWith(`${item.path}/`));
 
+            return (
+              <Link
+                key={item.path}
+                component={RouterLink}
+                to={item.path}
+                underline="none"
+                aria-current={isActive ? "page" : undefined}
+                sx={{
+                  position: "relative",
+                  px: 0.4,
+                  py: 0.5,
+                  color: isActive ? LIGHT_GOLD : "rgba(255,255,255,0.76)",
+                  fontSize: { xs: "0.85rem", sm: "0.95rem" },
+                  fontWeight: isActive ? 700 : 500,
+                  transition: "color 0.25s ease",
+                  "&:hover": {
+                    color: LIGHT_GOLD,
+                  },
+                  "&::after": {
+                    content: '""',
+                    position: "absolute",
+                    left: 0,
+                    bottom: 0,
+                    width: isActive ? "100%" : 0,
+                    height: "1px",
+                    background: GOLD,
+                    transition: "width 0.25s ease",
+                  },
+                  "&:hover::after": {
+                    width: "100%",
+                  },
+                }}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </Stack>
         {/* Social media links */}
         {(isLoading || socialLinks.length > 0) && (
           <Stack
@@ -370,39 +392,37 @@ export default function Footer() {
               />
             ) : (
               socialLinks.map((item) => (
-                <Tooltip title={item.name} key={item.name}>
-                  <IconButton
-                    component={motion.a}
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Visit Golden Dreams on ${item.name}`}
-                    whileHover={{ scale: 1.12, y: -3 }}
-                    whileTap={{ scale: 0.95 }}
-                    sx={{
-                      width: 42,
-                      height: 42,
-                      color: LIGHT_GOLD,
-                      background: "rgba(216,177,90,0.055)",
-                      border: "1px solid rgba(216,177,90,0.28)",
-                      backdropFilter: "blur(8px)",
-                      transition:
-                        "background 0.25s ease, border-color 0.25s ease",
-                      "&:hover": {
-                        color: "#080808",
-                        background: `linear-gradient(135deg, ${GOLD}, ${LIGHT_GOLD})`,
-                        borderColor: LIGHT_GOLD,
-                      },
-                    }}
-                  >
-                    {item.icon}
-                  </IconButton>
-                </Tooltip>
+                <IconButton
+                  key={item.name}
+                  component={motion.a}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Visit Golden Dreams on ${item.name}`}
+                  whileHover={{ scale: 1.12, y: -3 }}
+                  whileTap={{ scale: 0.95 }}
+                  sx={{
+                    width: 42,
+                    height: 42,
+                    color: LIGHT_GOLD,
+                    background: "rgba(216,177,90,0.055)",
+                    border: "1px solid rgba(216,177,90,0.28)",
+                    backdropFilter: "blur(8px)",
+                    transition:
+                      "background 0.25s ease, border-color 0.25s ease",
+                    "&:hover": {
+                      color: "#080808",
+                      background: `linear-gradient(135deg, ${GOLD}, ${LIGHT_GOLD})`,
+                      borderColor: LIGHT_GOLD,
+                    },
+                  }}
+                >
+                  {item.icon}
+                </IconButton>
               ))
             )}
           </Stack>
         )}
-
         {isError && (
           <Typography
             sx={{
@@ -415,7 +435,6 @@ export default function Footer() {
             Social links are temporarily unavailable.
           </Typography>
         )}
-
         {/* Tagline */}
         <Typography
           sx={{
@@ -428,7 +447,6 @@ export default function Footer() {
         >
           Every moment tells a story.
         </Typography>
-
         {/* Subtle gold divider */}
         <Box
           sx={{
@@ -441,7 +459,6 @@ export default function Footer() {
               "linear-gradient(90deg, transparent, rgba(216,177,90,0.4), transparent)",
           }}
         />
-
         {/* Copyright */}
         <Typography
           sx={{

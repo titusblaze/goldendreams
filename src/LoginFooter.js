@@ -354,8 +354,13 @@ export default function LoginFooter() {
             }}
           >
             {/* BRAND */}
-            <Box>
-              <Stack direction="row" spacing={1.5} alignItems="center">
+            <Box sx={{ textAlign: { xs: "center", md: "left" } }}>
+              <Stack
+                direction="row"
+                spacing={1.5}
+                alignItems="center"
+                justifyContent={{ xs: "center", md: "flex-start" }}
+              >
                 <Box
                   sx={{
                     width: 49,
@@ -403,7 +408,9 @@ export default function LoginFooter() {
                 sx={{
                   mt: 2.5,
                   maxWidth: 390,
+                  mx: { xs: "auto", md: 0 },
                   color: "rgba(232,229,222,0.72)",
+                  textAlign: { xs: "center", md: "left" },
                   fontSize: 14,
                   lineHeight: 1.9,
                 }}
@@ -420,11 +427,20 @@ export default function LoginFooter() {
                   xs: "none",
                   md: "1px solid rgba(216,177,90,0.2)",
                 },
-                pl: { xs: 0, md: 4 },
+                borderRight: {
+                  xs: "none",
+                  md: "1px solid rgba(216,177,90,0.2)",
+                },
+                px: { xs: 0, md: 3 },
                 py: { xs: 0, md: 1 },
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                textAlign: "center",
+                minWidth: 0,
               }}
             >
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">
                 <AutoAwesomeRoundedIcon
                   sx={{ fontSize: 15, color: GOLD }}
                 />
@@ -446,7 +462,11 @@ export default function LoginFooter() {
                 useFlexGap
                 flexWrap="wrap"
                 spacing={{ xs: 2.2, sm: 2.5 }}
-                sx={{ mt: 2.5 }}
+                sx={{
+                  mt: 2.5,
+                  justifyContent: "center",
+                  width: "100%",
+                }}
               >
                 {footerLinks.map((item) => (
                   <Link
@@ -479,12 +499,11 @@ export default function LoginFooter() {
             {/* BRAND VALUES */}
             <Box
               sx={{
-                borderLeft: {
-                  xs: "none",
-                  lg: "1px solid rgba(216,177,90,0.2)",
-                },
-                pl: { xs: 0, lg: 4 },
                 py: { xs: 0, lg: 1 },
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
               }}
             >
               <Typography
