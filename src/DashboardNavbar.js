@@ -450,12 +450,17 @@ export default function DashboardNavbar() {
           <Box
             sx={{
               width: "100%",
-              maxWidth: 540,
+              maxWidth: { xs: 540, md: 960 },
+              display: "flex",
+              flexDirection: { xs: "column", md: "row" },
+              alignItems: "center",
+              justifyContent: "center",
+              gap: { xs: 1, md: 5 },
               textAlign: "center",
               position: "relative",
               zIndex: 1,
-              px: { xs: 2, sm: 4 },
-              py: { xs: 4, sm: 5 },
+              px: { xs: 2, sm: 4, md: 5 },
+              py: { xs: 4, sm: 5, md: 4 },
               borderRadius: "28px",
               border: "1px solid rgba(215,177,94,0.25)",
               background:
@@ -471,139 +476,152 @@ export default function DashboardNavbar() {
               src={Logo}
               alt="Golden Dreams"
               sx={{
-                width: { xs: 145, sm: 185, md: 205 },
-                height: { xs: 145, sm: 185, md: 205 },
+                width: { xs: 145, sm: 185, md: 260 },
+                height: { xs: 145, sm: 185, md: 260 },
                 objectFit: "contain",
-                mb: 2,
+                mb: { xs: 2, md: 0 },
+                flexShrink: 0,
                 filter:
                   "drop-shadow(0 0 18px rgba(221,184,103,0.35))",
                 animation: "gdLogoReveal 1s ease both",
               }}
             />
 
-            <Typography
-              sx={{
-                fontSize: {
-                  xs: "1.65rem",
-                  sm: "2.1rem",
-                  md: "2.4rem",
-                },
-                fontWeight: 800,
-                letterSpacing: "0.13em",
-                textTransform: "uppercase",
-                background:
-                  "linear-gradient(90deg, #F7E7BA, #D5AC58, #F7E7BA)",
-                backgroundClip: "text",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                animation: "gdGoldGlow 3s ease-in-out infinite",
-              }}
-            >
-              Golden Dreams
-            </Typography>
-
-            <Typography
-              sx={{
-                mt: 1,
-                fontSize: "0.68rem",
-                letterSpacing: "0.35em",
-                color: "rgba(239,220,177,0.65)",
-              }}
-            >
-              CREATIVE STUDIO
-            </Typography>
-
-            {/* Gold Divider */}
-
             <Box
               sx={{
-                width: 110,
-                height: "1px",
-                mx: "auto",
-                my: 3,
-                background:
-                  "linear-gradient(90deg, transparent, #D8B66A, transparent)",
-              }}
-            />
-
-            <Typography
-              sx={{
-                fontSize: { xs: "1.8rem", sm: "2.25rem" },
-                fontWeight: 700,
-                color: "#F1D797",
-                mb: 1.5,
+                width: "100%",
+                minWidth: 0,
+                maxWidth: { xs: "100%", md: 570 },
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
-              Thank You! ❤️
-            </Typography>
+              <Typography
+                sx={{
+                  fontSize: {
+                    xs: "1.65rem",
+                    sm: "2.1rem",
+                    md: "2.4rem",
+                  },
+                  fontWeight: 800,
+                  letterSpacing: "0.13em",
+                  textTransform: "uppercase",
+                  background:
+                    "linear-gradient(90deg, #F7E7BA, #D5AC58, #F7E7BA)",
+                  backgroundClip: "text",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  animation: "gdGoldGlow 3s ease-in-out infinite",
+                }}
+              >
+                Golden Dreams
+              </Typography>
 
-            <Typography
-              sx={{
-                fontSize: {
-                  xs: "1rem",
-                  sm: "1.12rem",
-                },
-                color: "#F5E7C8",
-                fontWeight: 500,
-                lineHeight: 1.7,
-              }}
-            >
-              Thank you for choosing Golden Dreams.
-            </Typography>
+              <Typography
+                sx={{
+                  mt: 1,
+                  fontSize: "0.68rem",
+                  letterSpacing: "0.35em",
+                  color: "rgba(239,220,177,0.65)",
+                }}
+              >
+                CREATIVE STUDIO
+              </Typography>
 
-            {/* Cute Smile */}
+              {/* Gold Divider */}
 
-            <Typography
-              sx={{
-                fontSize: "2.7rem",
-                mt: 2,
-                display: "inline-block",
-                animation: "gdFloat 2.5s ease-in-out infinite",
-              }}
-            >
-              😊
-            </Typography>
+              <Box
+                sx={{
+                  width: 110,
+                  height: "1px",
+                  mx: "auto",
+                  my: 3,
+                  background:
+                    "linear-gradient(90deg, transparent, #D8B66A, transparent)",
+                }}
+              />
 
-            {/* Quote */}
+              <Typography
+                sx={{
+                  fontSize: { xs: "1.8rem", sm: "2.25rem" },
+                  fontWeight: 700,
+                  color: "#F1D797",
+                  mb: 1.5,
+                }}
+              >
+                Thank You! ❤️
+              </Typography>
 
-            <Typography
-              sx={{
-                mt: 1.5,
-                color: "#DCC38D",
-                fontSize: {
-                  xs: "0.92rem",
-                  sm: "1rem",
-                },
-                fontStyle: "italic",
-                lineHeight: 1.8,
-                px: 1,
-              }}
-            >
-              "Every beautiful moment deserves to be remembered."
-            </Typography>
+              <Typography
+                sx={{
+                  fontSize: {
+                    xs: "1rem",
+                    sm: "1.12rem",
+                  },
+                  color: "#F5E7C8",
+                  fontWeight: 500,
+                  lineHeight: 1.7,
+                }}
+              >
+                Thank you for choosing Golden Dreams.
+              </Typography>
 
-            <Typography
-              sx={{
-                mt: 2.5,
-                color: "rgba(245,231,193,0.68)",
-                fontSize: "0.88rem",
-                letterSpacing: "0.04em",
-              }}
-            >
-              We look forward to seeing you again!
-            </Typography>
+              {/* Cute Smile */}
 
-            <Typography
-              sx={{
-                mt: 2,
-                color: "#D7B66D",
-                fontSize: "0.8rem",
-                letterSpacing: "0.15em",
-                fontWeight: 600,
-              }}
-            >
-              — TEAM GOLDEN DREAMS
-            </Typography>
+              <Typography
+                sx={{
+                  fontSize: "2.7rem",
+                  mt: 2,
+                  display: "inline-block",
+                  animation: "gdFloat 2.5s ease-in-out infinite",
+                }}
+              >
+                😊
+              </Typography>
+
+              {/* Quote */}
+
+              <Typography
+                sx={{
+                  mt: 1.5,
+                  color: "#DCC38D",
+                  fontSize: {
+                    xs: "0.92rem",
+                    sm: "1rem",
+                  },
+                  fontStyle: "italic",
+                  lineHeight: 1.8,
+                  px: 1,
+                }}
+              >
+                "Every beautiful moment deserves to be remembered."
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 2.5,
+                  color: "rgba(245,231,193,0.68)",
+                  fontSize: "0.88rem",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                We look forward to seeing you again!
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 2,
+                  color: "#D7B66D",
+                  fontSize: "0.8rem",
+                  letterSpacing: "0.15em",
+                  fontWeight: 600,
+                }}
+              >
+                — TEAM GOLDEN DREAMS
+              </Typography>
+            </Box>
           </Box>
         </Box>
       )}

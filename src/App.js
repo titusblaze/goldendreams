@@ -313,6 +313,184 @@ function App() {
   const [pullProgress, setPullProgress] = useState(0);
 
   /* =========================================================
+     SINGLE DASHBOARD SESSION MONITOR
+     1 HOUR INACTIVITY - GOOGLE SHEETS STATUS VIA WORKER
+  ========================================================= */
+
+  useEffect(() => {
+    if (location.pathname !== "/dashboard" || !hasValidLocalSession()) {
+      return undefined;
+    }
+
+    const token =
+      localStorage.getItem("sessionToken") ||
+      sessionStorage.getItem("sessionToken");
+
+    if (!token) return undefined;
+
+    const WORKER_URL =
+      "https://golden-dreams-api-proxy.titus-blaze.workers.dev";
+    const IDLE_TIMEOUT_MS = 60 * 60 * 1000;
+    const HEARTBEAT_INTERVAL_MS = 30 * 1000;
+    const CHECK_INTERVAL_MS = 15 * 1000;
+
+    let lastActivityAt = 0;
+    let lastHeartbeatAt = 0;
+    let disposed = false;
+    let checkInterval = null;
+    let expiryStarted = false;
+
+    const clearLocalSession = () => {
+      [
+        "sessionToken",
+        "isLoggedIn",
+        "username",
+        "userName",
+        "UserName",
+        "goldenDreamsUserName",
+      ].forEach((key) => {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      });
+
+      window.dispatchEvent(new Event("golden-dreams-logout"));
+    };
+
+    const sendWorkerRequest = async (path) => {
+      const response = await fetch(`${WORKER_URL}${path}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      let result = {};
+      try {
+        result = await response.json();
+      } catch {
+        // Keep an empty response object if the service returns invalid JSON.
+      }
+
+      return { response, result };
+    };
+
+    const expireSession = async () => {
+      if (expiryStarted || disposed) return;
+      expiryStarted = true;
+
+      try {
+        await sendWorkerRequest("/expire");
+      } catch (error) {
+        console.warn("Session expiry update will be retried by the server:", error);
+      } finally {
+        clearLocalSession();
+        navigate("/login", { replace: true });
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      }
+    };
+
+    const checkIdleTime = () => {
+      if (
+        lastActivityAt &&
+        Date.now() - lastActivityAt >= IDLE_TIMEOUT_MS
+      ) {
+        expireSession();
+      }
+    };
+
+    const markActivity = () => {
+      if (!lastActivityAt || expiryStarted) return;
+
+      // Do not allow an event after the one-hour deadline to revive the session.
+      if (Date.now() - lastActivityAt >= IDLE_TIMEOUT_MS) {
+        expireSession();
+        return;
+      }
+
+      lastActivityAt = Date.now();
+
+      // Send a lightweight heartbeat at most once every 30 seconds.
+      if (Date.now() - lastHeartbeatAt >= HEARTBEAT_INTERVAL_MS) {
+        lastHeartbeatAt = Date.now();
+
+        sendWorkerRequest("/activity")
+          .then(({ response, result }) => {
+            if (!response.ok || result.success !== true) {
+              if (response.status === 401 || result.expired === true) {
+                expireSession();
+              }
+            }
+          })
+          .catch((error) => {
+            console.warn("Session heartbeat failed:", error);
+          });
+      }
+    };
+
+    const initializeSessionMonitor = async () => {
+      try {
+        const { response, result } = await sendWorkerRequest("/session");
+
+        if (!response.ok || result.success !== true) {
+          clearLocalSession();
+          navigate("/login", { replace: true });
+          return;
+        }
+
+        if (disposed) return;
+
+        lastActivityAt = Number(result.lastActivityAt) * 1000;
+
+        if (!Number.isFinite(lastActivityAt) || lastActivityAt <= 0) {
+          await expireSession();
+          return;
+        }
+
+        lastHeartbeatAt = Date.now();
+        checkIdleTime();
+
+        if (!expiryStarted) {
+          checkInterval = window.setInterval(
+            checkIdleTime,
+            CHECK_INTERVAL_MS
+          );
+        }
+      } catch (error) {
+        console.error("Unable to validate the dashboard session:", error);
+        // Fail closed: do not leave a dashboard session active if it cannot
+        // be validated against the session service.
+        clearLocalSession();
+        navigate("/login", { replace: true });
+      }
+    };
+
+    const activityEvents = [
+      "pointerdown",
+      "keydown",
+      "touchstart",
+      "wheel",
+      "scroll",
+    ];
+
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, markActivity, { passive: true });
+    });
+
+    initializeSessionMonitor();
+
+    return () => {
+      disposed = true;
+      if (checkInterval) window.clearInterval(checkInterval);
+
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, markActivity);
+      });
+    };
+  }, [location.pathname, navigate]);
+
+
+  /* =========================================================
      SPLASH SCREEN
   ========================================================= */
 

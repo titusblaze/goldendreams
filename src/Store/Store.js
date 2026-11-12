@@ -402,6 +402,7 @@ Thank you for choosing Golden Dreams!
     return (
       <article
         className="store-product-card store-reveal"
+        data-no-swipe
         key={product.id}
       >
         <div className="store-product-image">
@@ -579,6 +580,7 @@ Thank you for choosing Golden Dreams!
                   className={`store-package-card ${
                     selectedPackage?.id === pkg.id ? "selected" : ""
                   }`}
+                  data-no-swipe
                 >
                   <div className="store-package-info">
                     <span className="store-package-label">
@@ -642,6 +644,7 @@ Thank you for choosing Golden Dreams!
                   {storeProducts.map((product) => (
                     <div
                       className="store-extra-item"
+                      data-no-swipe
                       key={product.id}
                     >
                       <div>
