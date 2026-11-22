@@ -626,6 +626,7 @@ export default function GoogleReview() {
         <Box sx={{ width: "100%", overflow: "hidden" }}>
           <Box
             ref={reviewSliderRef}
+            data-no-swipe
             onMouseDown={handleMouseDown}
             onDragStart={(event) => event.preventDefault()}
             sx={{

@@ -311,184 +311,8 @@ function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pullProgress, setPullProgress] = useState(0);
-
-  /* =========================================================
-     SINGLE DASHBOARD SESSION MONITOR
-     1 HOUR INACTIVITY - GOOGLE SHEETS STATUS VIA WORKER
-  ========================================================= */
-
-  useEffect(() => {
-    if (location.pathname !== "/dashboard" || !hasValidLocalSession()) {
-      return undefined;
-    }
-
-    const token =
-      localStorage.getItem("sessionToken") ||
-      sessionStorage.getItem("sessionToken");
-
-    if (!token) return undefined;
-
-    const WORKER_URL =
-      "https://golden-dreams-api-proxy.titus-blaze.workers.dev";
-    const IDLE_TIMEOUT_MS = 60 * 60 * 1000;
-    const HEARTBEAT_INTERVAL_MS = 30 * 1000;
-    const CHECK_INTERVAL_MS = 15 * 1000;
-
-    let lastActivityAt = 0;
-    let lastHeartbeatAt = 0;
-    let disposed = false;
-    let checkInterval = null;
-    let expiryStarted = false;
-
-    const clearLocalSession = () => {
-      [
-        "sessionToken",
-        "isLoggedIn",
-        "username",
-        "userName",
-        "UserName",
-        "goldenDreamsUserName",
-      ].forEach((key) => {
-        localStorage.removeItem(key);
-        sessionStorage.removeItem(key);
-      });
-
-      window.dispatchEvent(new Event("golden-dreams-logout"));
-    };
-
-    const sendWorkerRequest = async (path) => {
-      const response = await fetch(`${WORKER_URL}${path}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      let result = {};
-      try {
-        result = await response.json();
-      } catch {
-        // Keep an empty response object if the service returns invalid JSON.
-      }
-
-      return { response, result };
-    };
-
-    const expireSession = async () => {
-      if (expiryStarted || disposed) return;
-      expiryStarted = true;
-
-      try {
-        await sendWorkerRequest("/expire");
-      } catch (error) {
-        console.warn("Session expiry update will be retried by the server:", error);
-      } finally {
-        clearLocalSession();
-        navigate("/login", { replace: true });
-        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-      }
-    };
-
-    const checkIdleTime = () => {
-      if (
-        lastActivityAt &&
-        Date.now() - lastActivityAt >= IDLE_TIMEOUT_MS
-      ) {
-        expireSession();
-      }
-    };
-
-    const markActivity = () => {
-      if (!lastActivityAt || expiryStarted) return;
-
-      // Do not allow an event after the one-hour deadline to revive the session.
-      if (Date.now() - lastActivityAt >= IDLE_TIMEOUT_MS) {
-        expireSession();
-        return;
-      }
-
-      lastActivityAt = Date.now();
-
-      // Send a lightweight heartbeat at most once every 30 seconds.
-      if (Date.now() - lastHeartbeatAt >= HEARTBEAT_INTERVAL_MS) {
-        lastHeartbeatAt = Date.now();
-
-        sendWorkerRequest("/activity")
-          .then(({ response, result }) => {
-            if (!response.ok || result.success !== true) {
-              if (response.status === 401 || result.expired === true) {
-                expireSession();
-              }
-            }
-          })
-          .catch((error) => {
-            console.warn("Session heartbeat failed:", error);
-          });
-      }
-    };
-
-    const initializeSessionMonitor = async () => {
-      try {
-        const { response, result } = await sendWorkerRequest("/session");
-
-        if (!response.ok || result.success !== true) {
-          clearLocalSession();
-          navigate("/login", { replace: true });
-          return;
-        }
-
-        if (disposed) return;
-
-        lastActivityAt = Number(result.lastActivityAt) * 1000;
-
-        if (!Number.isFinite(lastActivityAt) || lastActivityAt <= 0) {
-          await expireSession();
-          return;
-        }
-
-        lastHeartbeatAt = Date.now();
-        checkIdleTime();
-
-        if (!expiryStarted) {
-          checkInterval = window.setInterval(
-            checkIdleTime,
-            CHECK_INTERVAL_MS
-          );
-        }
-      } catch (error) {
-        console.error("Unable to validate the dashboard session:", error);
-        // Fail closed: do not leave a dashboard session active if it cannot
-        // be validated against the session service.
-        clearLocalSession();
-        navigate("/login", { replace: true });
-      }
-    };
-
-    const activityEvents = [
-      "pointerdown",
-      "keydown",
-      "touchstart",
-      "wheel",
-      "scroll",
-    ];
-
-    activityEvents.forEach((eventName) => {
-      window.addEventListener(eventName, markActivity, { passive: true });
-    });
-
-    initializeSessionMonitor();
-
-    return () => {
-      disposed = true;
-      if (checkInterval) window.clearInterval(checkInterval);
-
-      activityEvents.forEach((eventName) => {
-        window.removeEventListener(eventName, markActivity);
-      });
-    };
-  }, [location.pathname, navigate]);
-
+  const [swipeGlow, setSwipeGlow] = useState(null);
+  const [showSwipeIntro, setShowSwipeIntro] = useState(false);
 
   /* =========================================================
      SPLASH SCREEN
@@ -672,10 +496,27 @@ function App() {
 
   /* =========================================================
      MOBILE HORIZONTAL SWIPE NAVIGATION
-     PUBLIC PAGES ONLY
+     EDGE CHEVRON FEEDBACK - PUBLIC PAGES ONLY
   ========================================================= */
 
+  // Brief edge-only hint after the splash screen disappears.
   useEffect(() => {
+    if (!isMobile || showSplash) {
+      setShowSwipeIntro(false);
+      return undefined;
+    }
+
+    setShowSwipeIntro(true);
+    const introTimer = window.setTimeout(() => {
+      setShowSwipeIntro(false);
+    }, 1500);
+
+    return () => window.clearTimeout(introTimer);
+  }, [isMobile, showSplash, location.pathname]);
+
+  useEffect(() => {
+    if (!isMobile) return undefined;
+
     const pages = [
       "/",
       "/pricing",
@@ -686,20 +527,30 @@ function App() {
       "/login",
     ];
 
+    const currentIndex = pages.indexOf(location.pathname);
+    if (currentIndex === -1 || location.pathname === "/dashboard") {
+      setSwipeGlow(null);
+      return undefined;
+    }
+
     let startX = 0;
     let startY = 0;
     let endX = 0;
     let endY = 0;
-
     let tracking = false;
     let horizontalSwipe = false;
 
     const SWIPE_THRESHOLD = 75;
     const VERTICAL_LIMIT = 60;
 
+    const resetGlow = () => {
+      setSwipeGlow(null);
+    };
+
     const handleTouchStart = (event) => {
       if (event.touches.length !== 1) {
         tracking = false;
+        resetGlow();
         return;
       }
 
@@ -713,22 +564,15 @@ function App() {
         )
       ) {
         tracking = false;
+        resetGlow();
         return;
       }
 
-      if (
-        location.pathname === "/dashboard" ||
-        !pages.includes(location.pathname)
-      ) {
-        tracking = false;
-        return;
-      }
-
+      setShowSwipeIntro(false);
       startX = event.touches[0].clientX;
       startY = event.touches[0].clientY;
       endX = startX;
       endY = startY;
-
       tracking = true;
       horizontalSwipe = false;
     };
@@ -736,27 +580,51 @@ function App() {
     const handleTouchMove = (event) => {
       if (!tracking || event.touches.length !== 1) return;
 
-      endX = event.touches[0].clientX;
-      endY = event.touches[0].clientY;
+      const touch = event.touches[0];
+      endX = touch.clientX;
+      endY = touch.clientY;
 
       const deltaX = endX - startX;
       const deltaY = endY - startY;
 
-      if (Math.abs(deltaY) > VERTICAL_LIMIT &&
-          Math.abs(deltaY) > Math.abs(deltaX)) {
+      if (
+        Math.abs(deltaY) > VERTICAL_LIMIT &&
+        Math.abs(deltaY) > Math.abs(deltaX)
+      ) {
         tracking = false;
+        resetGlow();
         return;
       }
 
-      if (Math.abs(deltaX) > 15 &&
-          Math.abs(deltaX) > Math.abs(deltaY) * 1.3) {
+      if (
+        Math.abs(deltaX) > 12 &&
+        Math.abs(deltaX) > Math.abs(deltaY) * 1.25
+      ) {
         horizontalSwipe = true;
+
+        const hasDestination =
+          (deltaX < 0 && currentIndex < pages.length - 1) ||
+          (deltaX > 0 && currentIndex > 0);
+
+        if (hasDestination) {
+          // The chevrons stay at the screen edge; their vertical position
+          // follows the user's finger. The centre of the screen stays clear.
+          setSwipeGlow({
+            side: deltaX < 0 ? "right" : "left",
+            y: touch.clientY,
+            direction: deltaX < 0 ? "left" : "right",
+            strength: Math.min(Math.abs(deltaX) / 120, 1),
+          });
+        } else {
+          resetGlow();
+        }
       }
     };
 
     const handleTouchEnd = () => {
       if (!tracking || !horizontalSwipe) {
         tracking = false;
+        resetGlow();
         return;
       }
 
@@ -767,56 +635,51 @@ function App() {
         Math.abs(deltaX) >= SWIPE_THRESHOLD &&
         Math.abs(deltaX) > Math.abs(deltaY) * 1.3
       ) {
-        const currentIndex = pages.indexOf(location.pathname);
-
-        if (currentIndex !== -1) {
-          if (deltaX < 0 && currentIndex < pages.length - 1) {
-            navigate(pages[currentIndex + 1]);
-          } else if (deltaX > 0 && currentIndex > 0) {
-            navigate(pages[currentIndex - 1]);
-          }
+        if (deltaX < 0 && currentIndex < pages.length - 1) {
+          navigate(pages[currentIndex + 1]);
+        } else if (deltaX > 0 && currentIndex > 0) {
+          navigate(pages[currentIndex - 1]);
         }
       }
 
       tracking = false;
       horizontalSwipe = false;
+      resetGlow();
     };
 
     const handleTouchCancel = () => {
       tracking = false;
       horizontalSwipe = false;
+      resetGlow();
     };
 
     document.addEventListener("touchstart", handleTouchStart, {
       passive: true,
       capture: true,
     });
-
     document.addEventListener("touchmove", handleTouchMove, {
       passive: true,
       capture: true,
     });
-
     document.addEventListener("touchend", handleTouchEnd, {
       passive: true,
       capture: true,
     });
-
     document.addEventListener("touchcancel", handleTouchCancel, {
       passive: true,
       capture: true,
     });
 
     return () => {
+      setSwipeGlow(null);
       document.removeEventListener("touchstart", handleTouchStart, true);
       document.removeEventListener("touchmove", handleTouchMove, true);
       document.removeEventListener("touchend", handleTouchEnd, true);
       document.removeEventListener("touchcancel", handleTouchCancel, true);
     };
-  }, [location.pathname, navigate]);
+  }, [isMobile, location.pathname, navigate]);
 
-
-    /* =========================================================
+  /* =========================================================
      ANDROID BACK BUTTON HANDLING
   ========================================================= */
 
@@ -880,6 +743,128 @@ function App() {
 
   return (
     <div className="App">
+
+      {/* MOBILE EDGE CHEVRON SWIPE HINT - NO CENTRE INDICATOR */}
+
+      {isMobile && (showSwipeIntro || swipeGlow) && (() => {
+        const pages = [
+          "/",
+          "/pricing",
+          "/features",
+          "/contact",
+          "/store",
+          "/live",
+          "/login",
+        ];
+
+        const pageIndex = pages.indexOf(location.pathname);
+
+        const renderArrows = (side, active = false, y = "50%") => {
+          const isLeft = side === "left";
+          const arrow = isLeft ? "›" : "‹";
+
+          return (
+            <div
+              aria-hidden="true"
+              style={{
+                position: "fixed",
+                [side]: "8px",
+                top: typeof y === "number" ? `${y}px` : y,
+                transform: "translateY(-50%)",
+                height: "64px",
+                width: "64px",
+                display: "flex",
+                flexDirection: isLeft ? "row" : "row-reverse",
+                alignItems: "center",
+                justifyContent: "flex-start",
+                overflow: "hidden",
+                pointerEvents: "none",
+                zIndex: 99997,
+                opacity: active ? 1 : 0.85,
+              }}
+            >
+              {[0, 1, 2].map((item) => (
+                <span
+                  key={`${side}-${item}`}
+                  style={{
+                    display: "inline-block",
+                    flex: "0 0 20px",
+                    color: item === 2 ? "#FFF0B5" : "#D4AF37",
+                    fontFamily: "Arial, sans-serif",
+                    fontSize: active ? "43px" : "37px",
+                    fontWeight: 300,
+                    lineHeight: 1,
+                    textAlign: "center",
+                    opacity: 1 - item * 0.17,
+                    animation: `${
+                      isLeft ? "gdEdgeArrowLeft" : "gdEdgeArrowRight"
+                    } 3s ease-in-out ${item * 180}ms infinite`,
+                    filter: "drop-shadow(0 0 6px rgba(255,205,90,0.9))",
+                    textShadow: "0 0 8px rgba(255,215,100,0.8)",
+                  }}
+                >
+                  {arrow}
+                </span>
+              ))}
+            </div>
+          );
+        };
+
+        return (
+          <>
+            <style>{`
+              @keyframes gdEdgeArrowLeft {
+                0% {
+                  opacity: 0.25;
+                  transform: translateX(0);
+                }
+                50% {
+                  opacity: 1;
+                  transform: translateX(5px);
+                }
+                100% {
+                  opacity: 0.25;
+                  transform: translateX(0);
+                }
+              }
+
+              @keyframes gdEdgeArrowRight {
+                0% {
+                  opacity: 0.25;
+                  transform: translateX(0);
+                }
+                50% {
+                  opacity: 1;
+                  transform: translateX(-5px);
+                }
+                100% {
+                  opacity: 0.25;
+                  transform: translateX(0);
+                }
+              }
+            `}</style>
+
+            {showSwipeIntro && !swipeGlow && (
+              <>
+                {pageIndex > 0 && renderArrows("left")}
+
+                {pageIndex >= 0 &&
+                  pageIndex < pages.length - 1 &&
+                  renderArrows("right")}
+              </>
+            )}
+
+            {swipeGlow &&
+              renderArrows(
+                swipeGlow.side,
+                true,
+                swipeGlow.y
+              )}
+          </>
+        );
+      })()}
+
+
 
       {/* TOP-ONLY PULL TO REFRESH GOLDEN GLOW */}
 
